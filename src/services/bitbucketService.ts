@@ -1,5 +1,5 @@
-// Bitbucket API Service
-// Converted from hours.mjs to work in Vue frontend
+// Bitbucket API Service with API Token Authentication
+// Updated for Bitbucket's new API token system (replaced app passwords)
 
 import type {
   BitbucketRepository,
@@ -23,12 +23,16 @@ class BitbucketService {
   constructor() {
     this.config = {
       apiToken: import.meta.env.VITE_BITBUCKET_API_TOKEN || '',
-      apiUsername: import.meta.env.VITE_BITBUCKET_API_USERNAME || 'RensHoogendam',
+      apiUsername: import.meta.env.VITE_BITBUCKET_USERNAME || 'RensHoogendam',
       prAuthorDisplayName: import.meta.env.VITE_BITBUCKET_PR_AUTHOR_DISPLAY_NAME || 'Rens Hoogendam',
       commitAuthorRaw: import.meta.env.VITE_BITBUCKET_COMMIT_AUTHOR_RAW || 'RensHoogendam <r.hoogendam@atabix.nl>',
       repos: [], // Will be populated dynamically
-      baseUrl: import.meta.env.VITE_BITBUCKET_BASE_URL || 'https://api.bitbucket.org/2.0/repositories/atabix'
+      baseUrl: 'https://api.bitbucket.org/2.0/repositories' // Will be updated for multiple workspaces
     }
+    
+    // Get workspaces from env
+    const workspaces = import.meta.env.VITE_BITBUCKET_WORKSPACES?.split(',') || ['atabix']
+    this.config.workspaces = workspaces.map(ws => ws.trim())
     
     // Initialize cache
     this.cache = {
@@ -38,7 +42,7 @@ class BitbucketService {
     }
   }
 
-  // Base64 encoding for authentication
+  // Base64 encoding for Basic authentication fallback
   private getStringToBase64(text: string): string {
     const binString = Array.from(new TextEncoder().encode(text), (byte) => 
       String.fromCodePoint(byte)
@@ -46,24 +50,61 @@ class BitbucketService {
     return btoa(binString)
   }
 
-  // Get fetch options with authentication
+  // Get fetch options with Basic Auth using App Password
   private getFetchOptions(): RequestInit {
+    if (!this.config.apiToken || !this.config.apiUsername) {
+      console.warn('⚠️ Missing credentials: Check VITE_BITBUCKET_USERNAME and VITE_BITBUCKET_APP_PASSWORD')
+    }
+    
     return {
       method: 'GET',
       headers: {
         'Authorization': `Basic ${this.getStringToBase64(`${this.config.apiUsername}:${this.config.apiToken}`)}`,
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'User-Agent': 'Hours-Vue-App/1.0'
       }
     }
   }
 
-  // Generic fetch wrapper
-  private async getFetch<T = any>(url: string): Promise<T | undefined> {
-    console.log('fetch()', url)
+  // Get fetch options - Use Basic auth with email:token (as per Atlassian docs)
+  private async getFetchOptions(): Promise<RequestInit> {
+    if (!this.config.apiToken || !this.config.apiUsername) {
+      throw new Error('Missing credentials: Please set VITE_BITBUCKET_USERNAME (email) and VITE_BITBUCKET_API_TOKEN')
+    }
     
-    const options = this.getFetchOptions()
+    return {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${this.getStringToBase64(`${this.config.apiUsername}:${this.config.apiToken}`)}`,
+        'Accept': 'application/json',
+        'User-Agent': 'Hours-Vue-App/1.0'
+      }
+    }
+  }
+
+  // Fallback to Bearer token if Basic auth fails (for testing)
+  private async getFetchOptionsBasic(): Promise<RequestInit> {
+    if (!this.config.apiToken) {
+      throw new Error('Missing API token: Please set VITE_BITBUCKET_API_TOKEN')
+    }
+    
+    return {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.config.apiToken}`,
+        'Accept': 'application/json',
+        'User-Agent': 'Hours-Vue-App/1.0'
+      }
+    }
+  }
+
+  // Generic fetch wrapper with comprehensive error handling
+  private async getFetch<T = any>(url: string): Promise<T | undefined> {
+    console.log('🌐 fetch():', url)
     
     try {
+      // Use Basic auth with email:token (works with API tokens)
+      const options = await this.getFetchOptions()
       const response = await fetch(url, options)
       
       if (response.ok) {
@@ -71,12 +112,47 @@ class BitbucketService {
           return await response.json()
         } catch (error) {
           console.error('JSON parsing error:', { error, url, options })
+          return undefined
         }
       }
       
-      console.error('HTTP error:', { status: response.status, statusText: response.statusText, url })
+      // Enhanced error handling with specific messages
+      if (response.status === 401) {
+        console.error('🔐 Authentication failed (401):', {
+          message: 'Invalid or expired Bitbucket credentials',
+          suggestion: 'Ensure you use your EMAIL address (not username) with API token. Create new token at https://bitbucket.org/account/settings/app-passwords/',
+          url: url,
+          usernameHint: 'Username should be your Atlassian email address',
+          tokenPreview: this.config.apiToken ? `${this.config.apiToken.substring(0, 10)}...` : 'missing'
+        })
+      } else if (response.status === 403) {
+        console.error('🚫 Access forbidden (403):', {
+          message: 'Token lacks required permissions',
+          suggestion: 'Ensure your token has "Repositories: Read" and "Pull requests: Read" permissions',
+          url: url
+        })
+      } else if (response.status === 404) {
+        console.error('❓ Resource not found (404):', {
+          message: 'Repository or endpoint not found',
+          url: url
+        })
+      } else {
+        console.error('HTTP error:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: url
+        })
+      }
     } catch (error) {
-      console.error('Fetch error:', { error, url })
+      // Check if it's a credentials error
+      if (error instanceof Error && error.message.includes('API token')) {
+        console.error('🔐 Missing API token:', {
+          message: error.message,
+          suggestion: 'Please set VITE_BITBUCKET_API_TOKEN in your .env file'
+        })
+      } else {
+        console.error('Fetch error:', { error, url })
+      }
     }
     
     return undefined
@@ -194,7 +270,7 @@ class BitbucketService {
     return tickets[0]
   }
 
-  // Fetch all repositories from workspace
+  // Fetch all repositories from multiple workspaces
   async fetchAllRepositories(): Promise<BitbucketRepository[]> {
     // Check cache first (cache repos for 1 hour)
     if (this.cache.repositories && this.cache.repositoriesTimestamp && this.isCacheValid(this.cache.repositoriesTimestamp, 60)) {
@@ -202,58 +278,61 @@ class BitbucketService {
       return this.cache.repositories
     }
     
-    const url = `https://api.bitbucket.org/2.0/repositories/atabix?fields=next,values.name,values.updated_on,values.language&sort=-updated_on`
+    const allRepositories: BitbucketRepository[] = []
     
-    try {
-      const repositories = []
-      let response = await this.getFetch(url)
+    // Fetch from all configured workspaces
+    for (const workspace of this.config.workspaces || ['atabix']) {
+      console.log(`🔍 Fetching repositories for workspace: ${workspace}`)
       
-      if (!response) return []
+      const url = `https://api.bitbucket.org/2.0/repositories/${workspace}?fields=next,values.name,values.updated_on,values.language&sort=-updated_on`
       
-      repositories.push(...(response.values || []))
-      
-      // Get additional pages if needed (limit to 3 pages to avoid too many calls)
-      let pageCount = 1
-      while (response.next && pageCount < 3) {
-        response = await this.getFetch(response.next)
-        if (response?.values) {
-          repositories.push(...response.values)
+      try {
+        let response = await this.getFetch(url)
+        
+        if (!response) {
+          console.warn(`Failed to fetch repositories for workspace: ${workspace}`)
+          continue
         }
-        pageCount++
-      }
-      
-      // Return repo names sorted alphabetically
-      const result = repositories
-        .map(repo => ({
-          name: repo.name,
-          updated_on: repo.updated_on,
-          language: repo.language
+        
+        const workspaceRepos = response.values || []
+        
+        // Add workspace info to each repo
+        const reposWithWorkspace = workspaceRepos.map(repo => ({
+          ...repo,
+          workspace: workspace
         }))
-        .sort((a, b) => a.name.localeCompare(b.name))
         
-      // Cache the results
-      this.cache.repositories = result
-      this.cache.repositoriesTimestamp = Date.now()
-      console.log('Cached repository list')
-      
-      return result
+        allRepositories.push(...reposWithWorkspace)
         
-    } catch (error) {
-      console.error('Error fetching repositories:', error)
-      // Fallback to original hardcoded list if API fails
-      return [
-        'atabase-admin-vue',
-        'atabase-accounts-vue', 
-        'atabase-cases-vue',
-        'atabase-crm-vue',
-        'atabase-datalist-snippet',
-        'atabase-dms-vue',
-        'atabase-finance-vue',
-        'atabase-forms-vue',
-        'atabase-portal-vue',
-        'javascript-packages'
-      ].map(name => ({ name, updated_on: null, language: null }))
+        // Get additional pages if needed (limit to 3 pages per workspace)
+        let pageCount = 1
+        while (response.next && pageCount < 3) {
+          response = await this.getFetch(response.next)
+          if (response?.values) {
+            const moreRepos = response.values.map(repo => ({
+              ...repo,
+              workspace: workspace
+            }))
+            allRepositories.push(...moreRepos)
+          }
+          pageCount++
+        }
+        
+      } catch (error) {
+        console.error(`Error fetching repositories for workspace ${workspace}:`, error)
+        // Continue with other workspaces
+      }
     }
+    
+    // Sort all repositories by name
+    const result = allRepositories.sort((a, b) => a.name.localeCompare(b.name))
+    
+    // Cache the results
+    this.cache.repositories = result
+    this.cache.repositoriesTimestamp = Date.now()
+    console.log(`✅ Cached ${result.length} repositories from ${this.config.workspaces?.length || 1} workspace(s)`)
+    
+    return result
   }
 
   // Initialize repositories (call this before using other methods)
@@ -261,16 +340,19 @@ class BitbucketService {
     const allRepos = await this.fetchAllRepositories()
     
     if (selectedRepos && selectedRepos.length > 0) {
-      // Use only selected repositories
-      this.config.repos = selectedRepos.filter(repo => 
-        allRepos.some(r => r.name === repo)
-      )
+      // Use only selected repositories - convert names to full paths
+      this.config.repos = selectedRepos
+        .filter(repo => allRepos.some(r => r.name === repo))
+        .map(repoName => {
+          const foundRepo = allRepos.find(r => r.name === repoName)
+          return foundRepo ? `${foundRepo.workspace}/${foundRepo.name}` : repoName
+        })
     } else {
       // Use all repositories by default, but filter out some common ones to exclude
       const excludePatterns: string[] = []
       this.config.repos = allRepos
         .filter(repo => !excludePatterns.some(pattern => repo.name.includes(pattern)))
-        .map(repo => repo.name)
+        .map(repo => `${repo.workspace}/${repo.name}`)
     }
     
     console.log(`Initialized with ${this.config.repos.length} repositories:`, this.config.repos)
@@ -562,6 +644,39 @@ class BitbucketService {
       throw error
     }
   }
+
+  // Test authentication method
+  async testAuthentication(): Promise<{ success: boolean; message: string; userInfo?: any }> {
+    console.log('🔐 Testing Bitbucket API Token authentication...')
+    
+    try {
+      // Test against user endpoint - should work with Bearer token
+      const userInfo = await this.getFetch('https://api.bitbucket.org/2.0/user')
+      
+      if (userInfo) {
+        return {
+          success: true,
+          message: `API Token authentication successful for user: ${userInfo.display_name || userInfo.username}`,
+          userInfo: userInfo
+        }
+      }
+      
+      return {
+        success: false,
+        message: 'Authentication failed. Please check your Bitbucket API Token.'
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Authentication test failed: ${error}`
+      }
+    }
+  }
+
+  // Check if user has valid credentials
+  hasCredentials(): boolean {
+    return !!(this.config.apiUsername && this.config.apiToken)
+  }
 }
 
 // Export singleton instance with additional methods
@@ -572,6 +687,7 @@ interface ExtendedBitbucketService extends BitbucketService {
   getAvailableRepositories(): Promise<BitbucketRepository[]>
   clearCache(pattern?: string | null): void
   fetchAllDataFresh(maxDays?: number, selectedRepos?: string[] | null): Promise<ProcessedCommit[]>
+  testAuthentication(): Promise<{ success: boolean; message: string; userInfo?: any }>
 }
 
 // Add convenience methods to the service instance
@@ -587,6 +703,10 @@ extendedService.clearCache = function(pattern: string | null = null): void {
 
 extendedService.fetchAllDataFresh = function(maxDays: number = 12, selectedRepos: string[] | null = null): Promise<ProcessedCommit[]> {
   return this.fetchAllData(maxDays, selectedRepos, true) // Force refresh
+}
+
+extendedService.testAuthentication = function(): Promise<{ success: boolean; message: string; userInfo?: any }> {
+  return baseService.testAuthentication()
 }
 
 export default extendedService

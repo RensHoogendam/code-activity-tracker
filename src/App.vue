@@ -1,12 +1,14 @@
 <script setup>
-import { ref, onMounted, provide } from 'vue'
+import { ref, onMounted, provide, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppNavigation from './components/AppNavigation.vue'
 import LoadingSpinner from './components/LoadingSpinner.vue'
-import { bitbucketService } from './services/bitbucketService'
+import LoginPage from './components/LoginPage.vue'
+import bitbucketService from './services/bitbucketService'
 
 const route = useRoute()
 
+const isAuthenticated = ref(false)
 const isLoading = ref(false)
 const hoursData = ref([])
 const filteredData = ref([])
@@ -21,13 +23,39 @@ const filters = ref({
   type: 'all' // all, commits, pullrequests
 })
 
+// Check if we're on the OAuth callback page
+const isOAuthCallback = computed(() => route.path === '/oauth/callback')
+
 // Provide data to child components
 provide('hoursData', hoursData)
 provide('filteredData', filteredData)
 provide('filters', filters)
 provide('isLoading', isLoading)
+provide('isAuthenticated', isAuthenticated)
+
+onMounted(async () => {
+  // Check if credentials are available
+  isAuthenticated.value = bitbucketService.hasCredentials()
+  
+  // If we have credentials, test them and fetch initial data
+  if (isAuthenticated.value) {
+    const testResult = await bitbucketService.testAuthentication()
+    if (testResult.success) {
+      console.log('✅ Authentication successful')
+      await fetchHoursData()
+    } else {
+      console.error('❌ Authentication failed:', testResult.message)
+      isAuthenticated.value = false
+    }
+  }
+})
 
 async function fetchHoursData(forceRefresh = false) {
+  if (!isAuthenticated.value) {
+    console.warn('Not authenticated - cannot fetch data')
+    return
+  }
+  
   isLoading.value = true
   error.value = null
   
@@ -38,7 +66,12 @@ async function fetchHoursData(forceRefresh = false) {
     lastUpdated.value = new Date()
   } catch (err) {
     error.value = 'Failed to fetch data from Bitbucket API'
-    console.error('Error fetching hours data:', err)
+    console.error('Fetch error:', err)
+    
+    // If it's an auth error, clear authentication
+    if (err.message && (err.message.includes('credentials') || err.message.includes('401'))) {
+      isAuthenticated.value = false
+    }
   } finally {
     isLoading.value = false
   }
@@ -103,32 +136,38 @@ onMounted(() => {
 
 <template>
   <div class="app">
-    <AppNavigation 
-      :last-updated="lastUpdated"
-      :filters="filters"
-      @refresh="fetchHoursData"
-      @force-refresh="handleForceRefresh"
-      @clear-cache="handleClearCache"
-      @filter-change="applyFilters"
-      :is-loading="isLoading"
-    />
+    <!-- Show login page if no credentials -->
+    <LoginPage v-if="!isAuthenticated" />
     
-    <main class="main-content">
-      <router-view 
-        :data="hoursData"
-        :filtered-data="filteredData"
-        :filters="filters"
-        :is-loading="isLoading"
+    <!-- Show main app if authenticated -->
+    <template v-else>
+      <AppNavigation 
         :last-updated="lastUpdated"
-        :error="error"
-        @filter-change="applyFilters"
-        @export="handleExport"
-        @repos-changed="handleReposChanged"
+        :filters="filters"
         @refresh="fetchHoursData"
         @force-refresh="handleForceRefresh"
         @clear-cache="handleClearCache"
+        @filter-change="applyFilters"
+        :is-loading="isLoading"
       />
-    </main>
+      
+      <main class="main-content">
+        <router-view 
+          :data="hoursData"
+          :filtered-data="filteredData"
+          :filters="filters"
+          :is-loading="isLoading"
+          :last-updated="lastUpdated"
+          :error="error"
+          @filter-change="applyFilters"
+          @export="handleExport"
+          @repos-changed="handleReposChanged"
+          @refresh="fetchHoursData"
+          @force-refresh="handleForceRefresh"
+          @clear-cache="handleClearCache"
+        />
+      </main>
+    </template>
   </div>
 </template>
 
