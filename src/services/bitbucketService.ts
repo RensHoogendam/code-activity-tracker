@@ -172,6 +172,38 @@ class BitbucketService {
     return this.getUnixDateToFilter(this.getDateNowMinusDays(maxDays))
   }
 
+  // Deduplicate commits to avoid showing the same commit twice
+  // (once from PR and once from repository direct fetch)
+  private deduplicateCommits(items: (ProcessedCommit | ProcessedPullRequest)[]): (ProcessedCommit | ProcessedPullRequest)[] {
+    const seen = new Set<string>()
+    const deduplicated: (ProcessedCommit | ProcessedPullRequest)[] = []
+    
+    for (const item of items) {
+      // Create a unique identifier for each item
+      let key: string
+      
+      if ('commit_hash' in item && item.commit_hash) {
+        // For commits, use hash + repo as the unique key
+        key = `commit:${item.repo}:${item.commit_hash}`
+      } else if ('pr_id' in item && item.pr_id) {
+        // For pull requests, use PR ID + repo as the unique key
+        key = `pr:${item.repo}:${item.pr_id}`
+      } else {
+        // Fallback - should not happen but handle gracefully
+        key = `unknown:${Math.random()}`
+      }
+      
+      if (!seen.has(key)) {
+        seen.add(key)
+        deduplicated.push(item)
+      } else {
+        console.log(`🔄 Deduplicated duplicate item: ${key}`)
+      }
+    }
+    
+    return deduplicated
+  }
+
   // Cache utility methods
   private getCacheKey(maxDays: number, selectedRepos: string[] | null): string {
     const repos = selectedRepos || this.config.repos
@@ -508,13 +540,51 @@ class BitbucketService {
     return allPullRequests
   }
 
+  // Fetch commits directly from repository (not through PRs)
+  private async getFetchRepositoryCommits(repo: string, since: string, sort: string = '-date'): Promise<BitbucketApiResponse<BitbucketCommit> | undefined> {
+    const newQuery = since.length ? `date>=${since}` : ''
+    const newSort = sort.length ? `&sort=${sort}` : ''
+    
+    // Fetch commits directly from the repository
+    const url = `${this.config.baseUrl}/${repo}/commits?q=${newQuery}${newSort}&fields=next,values.hash,values.date,values.message,values.author.raw`
+    
+    console.log('🔍 Fetching repository commits directly:', url)
+    return await this.getFetch(url)
+  }
+
+  // Get all pages of repository commits
+  private async getAllRepositoryCommits(repo: string, maxDays: number): Promise<({ next?: string; values: CompactCommit[] } | undefined)[]> {
+    const maxPages = 3  // Limit API calls
+    let pages = []
+    let i = 0
+    
+    let pageRaw = await this.getFetchRepositoryCommits(repo, this.getUpdateOnFilter(maxDays))
+    
+    if (!pageRaw) return []
+    
+    let page = this.getCompactListCommits(pageRaw)
+    pages = [page]
+    
+    while (page?.next && i < maxPages) {
+      pageRaw = await this.getFetch(page.next)
+      page = this.getCompactListCommits(pageRaw)
+      pages = [...pages, page]
+      i += 1
+    }
+    
+    return pages
+  }
+
   // Get all commits for all pull requests
   private async getAllReposListCommits(pullRequests: ProcessedPullRequest[], maxDays: number): Promise<(ProcessedCommit | ProcessedPullRequest)[]> {
     if (!pullRequests.length) return []
 
     let allCommits: (ProcessedCommit | ProcessedPullRequest)[] = []
 
-    // Filter PRs to only those by our author or very recent ones to reduce API calls
+    // ENHANCED: Fetch commits from both PRs AND directly from repositories
+    // This ensures we don't miss commits from deleted branches
+    
+    // 1. Get commits from pull requests (existing logic)
     const relevantPRs = pullRequests.filter((pr: ProcessedPullRequest) => 
       pr.pr_author_display_name === this.config.prAuthorDisplayName ||
       (new Date(pr.pr_updated_on) > new Date(Date.now() - (3 * 24 * 60 * 60 * 1000))) // Last 3 days
@@ -531,10 +601,58 @@ class BitbucketService {
       allCommits = [...allCommits, ...commitsCompact]
     }
 
+    // 2. ALSO fetch commits directly from each repository to catch any missed commits
+    console.log('🔍 ENHANCEMENT: Also fetching commits directly from repositories to catch commits from deleted branches...')
+    
+    for (const repo of this.config.repos) {
+      const repositoryCommits = await this.getAllRepositoryCommits(repo, maxDays)
+      const repositoryCommitsCompact = this.getAllCompactRepositoryCommits(repo, repositoryCommits.filter(Boolean))
+      
+      // Filter to only include our commits to avoid noise
+      const ourCommits = repositoryCommitsCompact.filter((commit: ProcessedCommit) => 
+        commit.commit_author_raw === this.config.commitAuthorRaw
+      )
+      
+      console.log(`📊 Found ${repositoryCommitsCompact.length} total commits in ${repo}, ${ourCommits.length} by ${this.config.commitAuthorRaw}`)
+      
+      allCommits = [...allCommits, ...ourCommits]
+    }
+
     // Add pull requests as items too
     allCommits = [...allCommits, ...pullRequests]
 
     return allCommits
+  }
+
+  // Transform repository commit data (for commits fetched directly from repository)
+  private getAllCompactRepositoryCommits(repo: string, data: ({ next?: string; values: CompactCommit[] } | undefined)[]): ProcessedCommit[] {
+    if (!data) return []
+
+    return data
+      .filter(Boolean)
+      .reduce((accumulator: CompactCommit[], page) => {
+        return [...accumulator, ...(page?.values || [])]
+      }, [])
+      .map((item): ProcessedCommit => {
+        const commitMessage = item.message || ''
+        const ticketRef = this.getPrimaryTicket(commitMessage)
+        
+        return {
+          repo,
+          pr: null, // No PR association for direct repository commits
+          pr_id: null,
+          pr_author_display_name: null,
+          pr_created_on: null,
+          pr_updated_on: null,
+          pr_links_commits_href: null,
+          commit_hash: item.hash,
+          commit_date: item.date,
+          commit_author_raw: item.author_raw,
+          commit_message: commitMessage,
+          ticket: ticketRef,
+          ticket_source: ticketRef ? 'commit message' : null
+        }
+      })
   }
 
   // Transform pull request data
@@ -621,8 +739,12 @@ class BitbucketService {
       const allCommits = await this.getAllReposListCommits(allPullRequests, maxDays)
       console.log(`Found ${allCommits.length} total items (PRs + commits)`)
       
+      // Deduplicate commits (remove duplicates between PR commits and repository commits)
+      const deduplicatedCommits = this.deduplicateCommits(allCommits)
+      console.log(`After deduplication: ${deduplicatedCommits.length} items`)
+      
       // Filter by author
-      const filteredData = allCommits.filter((item): item is ProcessedCommit => {
+      const filteredData = deduplicatedCommits.filter((item): item is ProcessedCommit => {
         if ('commit_author_raw' in item && item.commit_author_raw) {
           return item.commit_author_raw === this.config.commitAuthorRaw
         }
