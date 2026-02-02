@@ -540,15 +540,50 @@ class BitbucketService {
     return allPullRequests
   }
 
-  // Fetch commits directly from repository (not through PRs)
+  // Fetch commits directly from repository (not through PRs) with server-side author filtering
   private async getFetchRepositoryCommits(repo: string, since: string, sort: string = '-date'): Promise<BitbucketApiResponse<BitbucketCommit> | undefined> {
-    const newQuery = since.length ? `date>=${since}` : ''
-    const newSort = sort.length ? `&sort=${sort}` : ''
+    const dateFilter = since.length ? `date>=${since}` : ''
+    const sortParam = sort.length ? `&sort=${sort}` : ''
     
-    // Fetch commits directly from the repository
-    const url = `${this.config.baseUrl}/${repo}/commits?q=${newQuery}${newSort}&fields=next,values.hash,values.date,values.message,values.author.raw`
+    // Use username parameter for server-side filtering (more efficient than client-side filtering)
+    // This filters commits by the username associated with the author
+    const usernameParam = this.config.apiUsername ? `&username=${this.config.apiUsername}` : ''
     
-    console.log('🔍 Fetching repository commits directly:', url)
+    const queryParam = dateFilter ? `q=${dateFilter}` : 'q='
+    
+    // Fetch commits directly from the repository with server-side author filtering
+    const url = `${this.config.baseUrl}/${repo}/commits?${queryParam}${sortParam}${usernameParam}&fields=next,values.hash,values.date,values.message,values.author.raw,values.author.user.username`
+    
+    console.log('🔍 Fetching repository commits with server-side author filtering:', url)
+    console.log(`📋 Filtering by username: ${this.config.apiUsername}`)
+    
+    const result = await this.getFetch(url)
+    
+    // If no results and we have a username, try alternative filtering method
+    if ((!result || !result.values?.length) && this.config.apiUsername) {
+      console.log('🔄 No results with username parameter, trying alternative query method...')
+      return await this.getFetchRepositoryCommitsAlternative(repo, since, sort)
+    }
+    
+    return result
+  }
+
+  // Alternative method using advanced query filtering (fallback)
+  private async getFetchRepositoryCommitsAlternative(repo: string, since: string, sort: string = '-date'): Promise<BitbucketApiResponse<BitbucketCommit> | undefined> {
+    const dateFilter = since.length ? `date>=${since}` : ''
+    const sortParam = sort.length ? `&sort=${sort}` : ''
+    
+    // Method 2: Use advanced query syntax with author.user.username filter
+    const authorFilter = this.config.apiUsername ? `author.user.username="${this.config.apiUsername}"` : ''
+    
+    const fullQuery = [dateFilter, authorFilter].filter(Boolean).join(' AND ')
+    const queryParam = fullQuery ? `q=${encodeURIComponent(fullQuery)}` : 'q='
+    
+    const url = `${this.config.baseUrl}/${repo}/commits?${queryParam}${sortParam}&fields=next,values.hash,values.date,values.message,values.author.raw,values.author.user.username`
+    
+    console.log('🔍 Alternative filtering: Using advanced query syntax:', url)
+    console.log(`📋 Query filter: ${fullQuery}`)
+    
     return await this.getFetch(url)
   }
 
@@ -608,12 +643,14 @@ class BitbucketService {
       const repositoryCommits = await this.getAllRepositoryCommits(repo, maxDays)
       const repositoryCommitsCompact = this.getAllCompactRepositoryCommits(repo, repositoryCommits.filter(Boolean))
       
-      // Filter to only include our commits to avoid noise
+      // Server-side filtering should have already filtered by author, but double-check for safety
       const ourCommits = repositoryCommitsCompact.filter((commit: ProcessedCommit) => 
-        commit.commit_author_raw === this.config.commitAuthorRaw
+        commit.commit_author_raw === this.config.commitAuthorRaw ||
+        commit.commit_author_raw?.includes(this.config.apiUsername) // Fallback check
       )
       
-      console.log(`📊 Found ${repositoryCommitsCompact.length} total commits in ${repo}, ${ourCommits.length} by ${this.config.commitAuthorRaw}`)
+      console.log(`📊 Server-side filtered: ${repositoryCommitsCompact.length} commits in ${repo} (should all be by ${this.config.apiUsername})`)
+      console.log(`📊 Client-side verified: ${ourCommits.length} commits match author criteria`)
       
       allCommits = [...allCommits, ...ourCommits]
     }
