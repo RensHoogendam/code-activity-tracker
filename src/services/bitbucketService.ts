@@ -1,5 +1,10 @@
-// Bitbucket API Service with API Token Authentication
-// Updated for Bitbucket's new API token system (replaced app passwords)
+// Bitbucket Service - Laravel Backend Integration
+// NEW: Uses Laravel API backend for all Bitbucket operations (recommended approach)
+// Provides better security, caching, and error handling
+//
+// IMPORTANT: This service requires a Laravel backend running at localhost:8000
+// The Laravel backend handles all Bitbucket API authentication and data processing
+// Frontend tokens are no longer needed - all credentials are managed server-side
 
 import type {
   BitbucketRepository,
@@ -19,15 +24,19 @@ import type {
 class BitbucketService {
   private config: BitbucketServiceConfig
   private cache: ServiceCache
+  private apiBase: string
 
   constructor() {
+    // Use Laravel backend API as primary data source
+    this.apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    
     this.config = {
-      apiToken: import.meta.env.VITE_BITBUCKET_API_TOKEN || '',
-      apiUsername: import.meta.env.VITE_BITBUCKET_USERNAME || 'RensHoogendam',
+      apiToken: '', // Tokens now stored server-side in Laravel backend
+      apiUsername: import.meta.env.VITE_BITBUCKET_AUTHOR_USERNAME || 'RensHoogendam', // For API filtering
       prAuthorDisplayName: import.meta.env.VITE_BITBUCKET_PR_AUTHOR_DISPLAY_NAME || 'Rens Hoogendam',
       commitAuthorRaw: import.meta.env.VITE_BITBUCKET_COMMIT_AUTHOR_RAW || 'RensHoogendam <r.hoogendam@atabix.nl>',
       repos: [], // Will be populated dynamically
-      baseUrl: 'https://api.bitbucket.org/2.0/repositories' // Will be updated for multiple workspaces
+      baseUrl: `${this.apiBase}/bitbucket` // Laravel backend endpoints
     }
     
     // Get workspaces from env
@@ -42,98 +51,51 @@ class BitbucketService {
     }
   }
 
-  // Base64 encoding for Basic authentication fallback
-  private getStringToBase64(text: string): string {
-    const binString = Array.from(new TextEncoder().encode(text), (byte) => 
-      String.fromCodePoint(byte)
-    ).join('')
-    return btoa(binString)
-  }
-
-  // Get fetch options with Basic Auth using App Password
-  private getFetchOptions(): RequestInit {
-    if (!this.config.apiToken || !this.config.apiUsername) {
-      console.warn('⚠️ Missing credentials: Check VITE_BITBUCKET_USERNAME and VITE_BITBUCKET_APP_PASSWORD')
-    }
-    
-    return {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${this.getStringToBase64(`${this.config.apiUsername}:${this.config.apiToken}`)}`,
-        'Accept': 'application/json',
-        'User-Agent': 'Hours-Vue-App/1.0'
-      }
-    }
-  }
-
-  // Get fetch options - Use Basic auth with email:token (as per Atlassian docs)
-  private async getFetchOptions(): Promise<RequestInit> {
-    if (!this.config.apiToken || !this.config.apiUsername) {
-      throw new Error('Missing credentials: Please set VITE_BITBUCKET_USERNAME (email) and VITE_BITBUCKET_API_TOKEN')
-    }
-    
-    return {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${this.getStringToBase64(`${this.config.apiUsername}:${this.config.apiToken}`)}`,
-        'Accept': 'application/json',
-        'User-Agent': 'Hours-Vue-App/1.0'
-      }
-    }
-  }
-
-  // Fallback to Bearer token if Basic auth fails (for testing)
-  private async getFetchOptionsBasic(): Promise<RequestInit> {
-    if (!this.config.apiToken) {
-      throw new Error('Missing API token: Please set VITE_BITBUCKET_API_TOKEN')
-    }
-    
-    return {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.config.apiToken}`,
-        'Accept': 'application/json',
-        'User-Agent': 'Hours-Vue-App/1.0'
-      }
-    }
-  }
-
-  // Generic fetch wrapper with comprehensive error handling
+  // Laravel Backend API fetch wrapper
   private async getFetch<T = any>(url: string): Promise<T | undefined> {
-    console.log('🌐 fetch():', url)
+    console.log('🌐 Laravel API fetch():', url)
     
     try {
-      // Use Basic auth with email:token (works with API tokens)
-      const options = await this.getFetchOptions()
-      const response = await fetch(url, options)
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      })
       
       if (response.ok) {
         try {
           return await response.json()
         } catch (error) {
-          console.error('JSON parsing error:', { error, url, options })
+          console.error('JSON parsing error:', { error, url })
           return undefined
         }
       }
       
-      // Enhanced error handling with specific messages
+      // Enhanced error handling for Laravel backend responses
       if (response.status === 401) {
-        console.error('🔐 Authentication failed (401):', {
-          message: 'Invalid or expired Bitbucket credentials',
-          suggestion: 'Ensure you use your EMAIL address (not username) with API token. Create new token at https://bitbucket.org/account/settings/app-passwords/',
-          url: url,
-          usernameHint: 'Username should be your Atlassian email address',
-          tokenPreview: this.config.apiToken ? `${this.config.apiToken.substring(0, 10)}...` : 'missing'
+        console.error('🔐 Laravel backend authentication failed (401):', {
+          message: 'Backend authentication issue with Bitbucket API',
+          suggestion: 'Check Laravel backend configuration and Bitbucket token setup',
+          url: url
         })
       } else if (response.status === 403) {
         console.error('🚫 Access forbidden (403):', {
-          message: 'Token lacks required permissions',
-          suggestion: 'Ensure your token has "Repositories: Read" and "Pull requests: Read" permissions',
+          message: 'Backend reports insufficient permissions',
+          suggestion: 'Verify Bitbucket token permissions in Laravel backend',
           url: url
         })
       } else if (response.status === 404) {
         console.error('❓ Resource not found (404):', {
-          message: 'Repository or endpoint not found',
+          message: 'Laravel backend endpoint not found',
+          suggestion: 'Ensure Laravel backend is running on localhost:8000',
+          url: url
+        })
+      } else if (response.status === 500) {
+        console.error('🔥 Laravel backend error (500):', {
+          message: 'Internal server error in Laravel backend',
+          suggestion: 'Check Laravel logs for detailed error information',
           url: url
         })
       } else {
@@ -144,11 +106,12 @@ class BitbucketService {
         })
       }
     } catch (error) {
-      // Check if it's a credentials error
-      if (error instanceof Error && error.message.includes('API token')) {
-        console.error('🔐 Missing API token:', {
-          message: error.message,
-          suggestion: 'Please set VITE_BITBUCKET_API_TOKEN in your .env file'
+      // Check if Laravel backend is accessible
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.error('🔌 Laravel backend connection failed:', {
+          message: 'Cannot connect to Laravel backend',
+          suggestion: 'Ensure Laravel backend is running on localhost:8000',
+          apiBase: this.apiBase
         })
       } else {
         console.error('Fetch error:', { error, url })
@@ -302,7 +265,7 @@ class BitbucketService {
     return tickets[0]
   }
 
-  // Fetch all repositories from multiple workspaces
+  // Fetch all repositories via Laravel backend
   async fetchAllRepositories(): Promise<BitbucketRepository[]> {
     // Check cache first (cache repos for 1 hour)
     if (this.cache.repositories && this.cache.repositoriesTimestamp && this.isCacheValid(this.cache.repositoriesTimestamp, 60)) {
@@ -310,61 +273,36 @@ class BitbucketService {
       return this.cache.repositories
     }
     
-    const allRepositories: BitbucketRepository[] = []
+    console.log('🔍 Fetching repositories via Laravel backend...')
     
-    // Fetch from all configured workspaces
-    for (const workspace of this.config.workspaces || ['atabix']) {
-      console.log(`🔍 Fetching repositories for workspace: ${workspace}`)
+    try {
+      // Use Laravel backend endpoint for repositories
+      const workspaces = 'atabix'
+      const url = `${this.apiBase}/repositories?workspaces=${workspaces}`
       
-      const url = `https://api.bitbucket.org/2.0/repositories/${workspace}?fields=next,values.name,values.updated_on,values.language&sort=-updated_on`
+      const response = await this.getFetch<{ data: BitbucketRepository[] }>(url)
       
-      try {
-        let response = await this.getFetch(url)
-        
-        if (!response) {
-          console.warn(`Failed to fetch repositories for workspace: ${workspace}`)
-          continue
-        }
-        
-        const workspaceRepos = response.values || []
-        
-        // Add workspace info to each repo
-        const reposWithWorkspace = workspaceRepos.map(repo => ({
-          ...repo,
-          workspace: workspace
-        }))
-        
-        allRepositories.push(...reposWithWorkspace)
-        
-        // Get additional pages if needed (limit to 3 pages per workspace)
-        let pageCount = 1
-        while (response.next && pageCount < 3) {
-          response = await this.getFetch(response.next)
-          if (response?.values) {
-            const moreRepos = response.values.map(repo => ({
-              ...repo,
-              workspace: workspace
-            }))
-            allRepositories.push(...moreRepos)
-          }
-          pageCount++
-        }
-        
-      } catch (error) {
-        console.error(`Error fetching repositories for workspace ${workspace}:`, error)
-        // Continue with other workspaces
+      if (!response || !response.data) {
+        console.warn('No repositories returned from Laravel backend')
+        return []
       }
+      
+      const allRepositories = response.data
+      
+      // Sort all repositories by name
+      const result = allRepositories.sort((a, b) => a.name.localeCompare(b.name))
+      
+      // Cache the results
+      this.cache.repositories = result
+      this.cache.repositoriesTimestamp = Date.now()
+      console.log(`✅ Cached ${result.length} repositories from Laravel backend`)
+      
+      return result
+      
+    } catch (error) {
+      console.error('Error fetching repositories from Laravel backend:', error)
+      return []
     }
-    
-    // Sort all repositories by name
-    const result = allRepositories.sort((a, b) => a.name.localeCompare(b.name))
-    
-    // Cache the results
-    this.cache.repositories = result
-    this.cache.repositoriesTimestamp = Date.now()
-    console.log(`✅ Cached ${result.length} repositories from ${this.config.workspaces?.length || 1} workspace(s)`)
-    
-    return result
   }
 
   // Initialize repositories (call this before using other methods)
@@ -749,7 +687,7 @@ class BitbucketService {
       })
   }
 
-  // Main method to fetch all data
+  // Main method to fetch all data via Laravel backend
   async fetchAllData(maxDays: number = 12, selectedRepos: string[] | null = null, forceRefresh: boolean = false): Promise<ProcessedCommit[]> {
     try {
       // Check cache first (unless force refresh)
@@ -760,81 +698,88 @@ class BitbucketService {
         }
       }
       
-      console.log('Fetching fresh data...')
+      console.log('🚀 Fetching fresh data via Laravel backend...')
       
-      // Initialize repositories if not already done
-      if (this.config.repos.length === 0) {
-        console.log('Initializing repositories...')
-        await this.initializeRepositories(selectedRepos)
-      }
-      
-      console.log('Fetching pull requests...')
-      const allPullRequests = await this.getAllReposListPullRequests(maxDays)
-      console.log(`Found ${allPullRequests.length} total pull requests`)
-      
-      console.log('Fetching commits...')
-      const allCommits = await this.getAllReposListCommits(allPullRequests, maxDays)
-      console.log(`Found ${allCommits.length} total items (PRs + commits)`)
-      
-      // Deduplicate commits (remove duplicates between PR commits and repository commits)
-      const deduplicatedCommits = this.deduplicateCommits(allCommits)
-      console.log(`After deduplication: ${deduplicatedCommits.length} items`)
-      
-      // Filter by author
-      const filteredData = deduplicatedCommits.filter((item): item is ProcessedCommit => {
-        if ('commit_author_raw' in item && item.commit_author_raw) {
-          return item.commit_author_raw === this.config.commitAuthorRaw
-        }
-        if ('pr_author_display_name' in item && item.pr_author_display_name) {
-          return item.pr_author_display_name === this.config.prAuthorDisplayName
-        }
-        return false
+      // Use Laravel backend endpoint for commits and pull requests
+      const params = new URLSearchParams({
+        days: maxDays.toString(),
+        author: this.config.apiUsername // Use username/email instead of display name
       })
       
-      console.log(`Found ${filteredData.length} items by ${this.config.prAuthorDisplayName}`)
+      // Add repository filtering if specified
+      if (selectedRepos && selectedRepos.length > 0) {
+        params.append('repositories', selectedRepos.join(','))
+      }
+      
+      const url = `${this.apiBase}/bitbucket/commits?${params.toString()}`
+      
+      const response = await this.getFetch<{
+        commits: ProcessedCommit[]
+        pull_requests: ProcessedCommit[]
+        total_items: number
+        deduplication_stats?: any
+      }>(url)
+      
+      if (!response) {
+        throw new Error('Failed to fetch data from Laravel backend')
+      }
+      
+      // Laravel backend handles deduplication and filtering server-side
+      const allData = [
+        ...(response.commits || []),
+        ...(response.pull_requests || [])
+      ]
+      
+      // Sort by date (newest first) 
+      const sortedData = allData.sort((a, b) => {
+        const dateA = new Date(a.date || '').getTime()
+        const dateB = new Date(b.date || '').getTime()
+        return dateB - dateA
+      })
+      
+      console.log(`✅ Received ${sortedData.length} processed items from Laravel backend`)
+      if (response.deduplication_stats) {
+        console.log('📊 Deduplication stats:', response.deduplication_stats)
+      }
       
       // Cache the results
-      this.setCachedData(maxDays, selectedRepos, filteredData)
+      this.setCachedData(maxDays, selectedRepos, sortedData)
       
-      return filteredData
+      return sortedData
       
     } catch (error) {
-      console.error('Error fetching all data:', error)
+      console.error('Error fetching data from Laravel backend:', error)
       throw error
     }
   }
 
-  // Test authentication method
+  // Test Laravel backend authentication
   async testAuthentication(): Promise<{ success: boolean; message: string; userInfo?: any }> {
-    console.log('🔐 Testing Bitbucket API Token authentication...')
+    console.log('🔐 Testing Laravel backend authentication...')
     
     try {
-      // Test against user endpoint - should work with Bearer token
-      const userInfo = await this.getFetch('https://api.bitbucket.org/2.0/user')
+      const response = await this.getFetch<{ 
+        success: boolean; 
+        message: string; 
+        user_info?: any
+      }>(`${this.apiBase}/bitbucket/test-auth`)
       
-      if (userInfo) {
-        return {
-          success: true,
-          message: `API Token authentication successful for user: ${userInfo.display_name || userInfo.username}`,
-          userInfo: userInfo
-        }
-      }
-      
-      return {
+       return response || {
         success: false,
-        message: 'Authentication failed. Please check your Bitbucket API Token.'
-      }
+        message: 'No response from Laravel backend during authentication test'
+       }
     } catch (error) {
       return {
         success: false,
-        message: `Authentication test failed: ${error}`
+        message: `Laravel backend authentication test failed: ${error}`
       }
     }
   }
 
-  // Check if user has valid credentials
+  // Check if Laravel backend is accessible
   hasCredentials(): boolean {
-    return !!(this.config.apiUsername && this.config.apiToken)
+    // With Laravel backend, credentials are managed server-side
+    return !!this.apiBase
   }
 }
 
@@ -864,8 +809,5 @@ extendedService.fetchAllDataFresh = function(maxDays: number = 12, selectedRepos
   return this.fetchAllData(maxDays, selectedRepos, true) // Force refresh
 }
 
-extendedService.testAuthentication = function(): Promise<{ success: boolean; message: string; userInfo?: any }> {
-  return baseService.testAuthentication()
-}
 
 export default extendedService
