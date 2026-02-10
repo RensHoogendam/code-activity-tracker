@@ -88,6 +88,7 @@ export interface BitbucketServiceConfig {
   apiToken: string;
   apiUsername: string;
   prAuthorDisplayName: string;
+  authorEmail: string;
   commitAuthorRaw: string;
   repos: string[];
   baseUrl: string;

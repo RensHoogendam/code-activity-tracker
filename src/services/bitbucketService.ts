@@ -38,6 +38,7 @@ class BitbucketService {
       apiUsername: import.meta.env.VITE_BITBUCKET_AUTHOR_USERNAME || 'RensHoogendam', // For API filtering
       prAuthorDisplayName: import.meta.env.VITE_BITBUCKET_PR_AUTHOR_DISPLAY_NAME || 'Rens Hoogendam',
       commitAuthorRaw: import.meta.env.VITE_BITBUCKET_COMMIT_AUTHOR_RAW || 'RensHoogendam <r.hoogendam@atabix.nl>',
+      authorEmail: import.meta.env.VITE_BITBUCKET_AUTHOR_EMAIL,
       repos: [], // Will be populated dynamically
       baseUrl: `${this.apiBase}/bitbucket` // Laravel backend endpoints
     }
@@ -883,45 +884,91 @@ class BitbucketService {
       // Use Laravel backend endpoint for commits and pull requests
       const params = new URLSearchParams({
         days: maxDays.toString(),
-        author: this.config.apiUsername // Use username/email instead of display name
+        author: this.config.authorEmail || this.config.apiUsername // Use username/email instead of display name
       })
       
       // Build URL with repositories parameter manually to avoid double encoding
       let url = `${this.apiBase}/bitbucket/commits?${params.toString()}`
       
-      // // Add repository filtering if specified (avoid URLSearchParams encoding)
-      // if (selectedRepos && selectedRepos.length > 0) {
-      //   const reposParam = selectedRepos.join(',')
-      //   url += `&repositories=${reposParam}`
-      // }
       
       const response = await this.getFetch<{
-        commits: ProcessedCommit[]
-        pull_requests: ProcessedCommit[]
-        total_items: number
-        deduplication_stats?: any
+        data: Array<{
+          type: 'commit' | 'pull_request'
+          repository: string
+          hash?: string
+          date: string
+          message?: string
+          author_raw?: string
+          author_username?: string | null
+          ticket?: string | null
+          // PR-specific fields
+          pr_id?: number
+          pr_title?: string
+          pr_author?: string
+          pr_created_on?: string
+          pr_updated_on?: string
+        }>
+        cached?: boolean
+        cache_expires_at?: string
+        repositories_used?: string[]
       }>(url)
       
-      if (!response) {
+      if (!response || !response.data) {
         throw new Error('Failed to fetch data from Laravel backend')
       }
       
-      // Laravel backend handles deduplication and filtering server-side
-      const allData = [
-        ...(response.commits || []),
-        ...(response.pull_requests || [])
-      ]
+      // Transform the new API response format to ProcessedCommit format
+      const allData: ProcessedCommit[] = response.data.map(item => {
+        if (item.type === 'commit') {
+          return {
+            repo: item.repository,
+            pr: null,
+            pr_id: null,
+            pr_author_display_name: null,
+            pr_created_on: null,
+            pr_updated_on: null,
+            pr_links_commits_href: null,
+            commit_hash: item.hash || '',
+            commit_date: item.date,
+            commit_author_raw: item.author_raw || '',
+            commit_message: item.message || '',
+            ticket: item.ticket,
+            ticket_source: item.ticket ? 'commit message' : null
+          }
+        } else {
+          // Handle pull_request type
+          return {
+            repo: item.repository,
+            pr: item.pr_title || '',
+            pr_id: item.pr_id || null,
+            pr_author_display_name: item.pr_author || null,
+            pr_created_on: item.pr_created_on || null,
+            pr_updated_on: item.pr_updated_on || null,
+            pr_links_commits_href: null,
+            commit_hash: item.hash || '',
+            commit_date: item.date,
+            commit_author_raw: item.author_raw || '',
+            commit_message: item.message || '',
+            ticket: item.ticket,
+            ticket_source: item.ticket ? 'PR title' : null
+          }
+        }
+      })
       
       // Sort by date (newest first) 
       const sortedData = allData.sort((a, b) => {
-        const dateA = new Date(a.date || '').getTime()
-        const dateB = new Date(b.date || '').getTime()
+        const dateA = new Date(a.commit_date || '').getTime()
+        const dateB = new Date(b.commit_date || '').getTime()
         return dateB - dateA
       })
       
       console.log(`✅ Received ${sortedData.length} processed items from Laravel backend`)
-      if (response.deduplication_stats) {
-        console.log('📊 Deduplication stats:', response.deduplication_stats)
+      if (response.cached) {
+        console.log('📊 Cache info:', { 
+          cached: response.cached, 
+          expires_at: response.cache_expires_at,
+          repositories_used: response.repositories_used?.length 
+        })
       }
       
       // Cache the results
