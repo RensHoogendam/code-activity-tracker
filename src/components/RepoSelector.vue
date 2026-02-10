@@ -76,163 +76,170 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
+import { ref, onMounted, type Ref } from 'vue'
 import { bitbucketService } from '../services/bitbucketService'
 
-export default {
-  name: 'RepoSelector',
-  props: {
-    compact: {
-      type: Boolean,
-      default: false
-    },
-    // If true, load user repositories with enable/disable status
-    showStatus: {
-      type: Boolean,
-      default: true
+import type { UserRepository, RepositoryToggleResponse } from '../types/bitbucket'
+
+// Props with proper typing
+interface Props {
+  compact: boolean
+  showStatus: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  compact: false,
+  showStatus: true
+})
+
+// Emits with proper typing
+const emit = defineEmits<{
+  'repos-changed': [repos: string[]]
+  'repository-status-changed': [data: { repository: UserRepository; enabled: boolean }]
+}>()
+
+// Reactive state with proper typing
+const showSelector: Ref<boolean> = ref(false)
+const loading: Ref<boolean> = ref(false)
+const error: Ref<string | null> = ref(null)
+const availableRepos: Ref<UserRepository[]> = ref([])
+const selectedRepos: Ref<string[]> = ref([])
+const togglingRepos: Ref<Set<number>> = ref(new Set())
+
+// Lifecycle hook
+onMounted(async (): Promise<void> => {
+  console.log('RepoSelector mounted, loading repositories...')
+  await loadRepositories()
+})
+
+// Methods with proper typing
+async function loadRepositories(): Promise<void> {
+  loading.value = true
+  error.value = null
+  
+  try {
+    // Load user repositories with enable/disable status if showStatus is true
+    if (props.showStatus) {
+      availableRepos.value = await bitbucketService.fetchUserRepositories()
+    } else {
+      // For fallback, you might need to implement this method
+      availableRepos.value = await bitbucketService.fetchUserRepositories()
     }
-  },
-  emits: ['repos-changed', 'repository-status-changed'],
-  data() {
-    return {
-      showSelector: false,
-      loading: false,
-      error: null,
-      availableRepos: [],
-      selectedRepos: [],
-      togglingRepos: new Set() // Track which repos are being toggled
+    
+    // Select only enabled repos by default, or all repos if no status info
+    if (props.showStatus) {
+      selectedRepos.value = availableRepos.value
+        .filter((repo: UserRepository) => repo.is_enabled !== false)
+        .map((repo: UserRepository) => repo.name)
+    } else {
+      selectedRepos.value = availableRepos.value.map((repo: UserRepository) => repo.name)
     }
-  },
-  async mounted() {
-    console.log('RepoSelector mounted, loading repositories...')
-    await this.loadRepositories()
-  },
-  methods: {
-    async loadRepositories() {
-      this.loading = true
-      this.error = null
-      
-      try {
-        // Load user repositories with enable/disable status if showStatus is true
-        if (this.showStatus) {
-          this.availableRepos = await bitbucketService.getUserRepositories()
-        } else {
-          this.availableRepos = await bitbucketService.getAvailableRepositories()
-        }
-        
-        // Select only enabled repos by default, or all repos if no status info
-        if (this.showStatus) {
-          this.selectedRepos = this.availableRepos
-            .filter(repo => repo.is_enabled !== false)
-            .map(repo => repo.name)
-        } else {
-          this.selectedRepos = this.availableRepos.map(repo => repo.name)
-        }
-        
-        this.$emit('repos-changed', this.selectedRepos)
-        
-      } catch (err) {
-        this.error = err.message
-        console.error('Failed to load repositories:', err)
-      } finally {
-        this.loading = false
-      }
-    },
     
-    async toggleRepositoryStatus(repo) {
-      if (!repo.id || this.togglingRepos.has(repo.id)) {
-        return
-      }
-      
-      this.togglingRepos.add(repo.id)
-      
-      try {
-        const response = await bitbucketService.toggleRepositoryStatus(repo.id)
-        
-        if (response.success) {
-          // Update the repo in our local data
-          const repoIndex = this.availableRepos.findIndex(r => r.id === repo.id)
-          if (repoIndex !== -1) {
-            this.availableRepos[repoIndex].is_enabled = response.is_enabled
-            
-            // Update selected repos based on new status
-            const repoName = repo.name
-            const isSelected = this.selectedRepos.includes(repoName)
-            
-            if (response.is_enabled && !isSelected) {
-              // Enable and select the repo
-              this.selectedRepos.push(repoName)
-              this.$emit('repos-changed', this.selectedRepos)
-            } else if (!response.is_enabled && isSelected) {
-              // Disable and deselect the repo
-              this.selectedRepos = this.selectedRepos.filter(name => name !== repoName)
-              this.$emit('repos-changed', this.selectedRepos)
-            }
-            
-            // Emit status change event
-            this.$emit('repository-status-changed', {
-              repository: this.availableRepos[repoIndex],
-              enabled: response.is_enabled
-            })
-            
-            // Show success feedback (you could add a toast notification here)
-            console.log(`Repository ${repo.name} ${response.is_enabled ? 'enabled' : 'disabled'}`)
-          }
-        } else {
-          console.error('Failed to toggle repository status:', response.message)
-          // You could show an error toast here
-        }
-      } catch (err) {
-        console.error('Error toggling repository status:', err)
-        // You could show an error toast here
-      } finally {
-        this.togglingRepos.delete(repo.id)
-      }
-    },
+    emit('repos-changed', selectedRepos.value)
     
-    toggleRepo(repoName) {
-      // Check if repo is disabled
-      const repo = this.availableRepos.find(r => r.name === repoName)
-      if (repo && repo.is_enabled === false) {
-        return // Don't allow toggling disabled repositories
-      }
-      
-      const index = this.selectedRepos.indexOf(repoName)
-      if (index > -1) {
-        this.selectedRepos.splice(index, 1)
-      } else {
-        this.selectedRepos.push(repoName)
-      }
-      this.$emit('repos-changed', this.selectedRepos)
-    },
-    
-    selectAll() {
-      // Only select enabled repositories
-      this.selectedRepos = this.availableRepos
-        .filter(repo => repo.is_enabled !== false)
-        .map(repo => repo.name)
-      this.$emit('repos-changed', this.selectedRepos)
-    },
-    
-    selectNone() {
-      this.selectedRepos = []
-      this.$emit('repos-changed', this.selectedRepos)
-    },
-    
-    toggleSelector() {
-      this.showSelector = !this.showSelector
-    },
-    
-    formatDate(dateString) {
-      if (!dateString) return ''
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-      })
-    }
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
+    error.value = errorMessage
+    console.error('Failed to load repositories:', err)
+  } finally {
+    loading.value = false
   }
+}
+
+async function toggleRepositoryStatus(repo: UserRepository): Promise<void> {
+  if (!repo.id || togglingRepos.value.has(repo.id)) {
+    return
+  }
+  
+  togglingRepos.value.add(repo.id)
+  
+  try {
+    const response: RepositoryToggleResponse = await bitbucketService.toggleRepositoryStatus(repo.id.toString())
+    
+    if (response.success) {
+      // Update the repo in our local data
+      const repoIndex = availableRepos.value.findIndex((r: UserRepository) => r.id === repo.id)
+      if (repoIndex !== -1) {
+        availableRepos.value[repoIndex].is_enabled = response.is_enabled
+        
+        // Update selected repos based on new status
+        const repoName = repo.name
+        const isSelected = selectedRepos.value.includes(repoName)
+        
+        if (response.is_enabled && !isSelected) {
+          // Enable and select the repo
+          selectedRepos.value.push(repoName)
+          emit('repos-changed', selectedRepos.value)
+        } else if (!response.is_enabled && isSelected) {
+          // Disable and deselect the repo
+          selectedRepos.value = selectedRepos.value.filter((name: string) => name !== repoName)
+          emit('repos-changed', selectedRepos.value)
+        }
+        
+        // Emit status change event
+        emit('repository-status-changed', {
+          repository: availableRepos.value[repoIndex],
+          enabled: response.is_enabled
+        })
+        
+        // Show success feedback (you could add a toast notification here)
+        console.log(`Repository ${repo.name} ${response.is_enabled ? 'enabled' : 'disabled'}`)
+      }
+    } else {
+      console.error('Failed to toggle repository status:', response.message)
+      // You could show an error toast here
+    }
+  } catch (err: unknown) {
+    console.error('Error toggling repository status:', err)
+    // You could show an error toast here
+  } finally {
+    togglingRepos.value.delete(repo.id)
+  }
+}
+
+function toggleRepo(repoName: string): void {
+  // Check if repo is disabled
+  const repo = availableRepos.value.find((r: UserRepository) => r.name === repoName)
+  if (repo && repo.is_enabled === false) {
+    return // Don't allow toggling disabled repositories
+  }
+  
+  const index = selectedRepos.value.indexOf(repoName)
+  if (index > -1) {
+    selectedRepos.value.splice(index, 1)
+  } else {
+    selectedRepos.value.push(repoName)
+  }
+  emit('repos-changed', selectedRepos.value)
+}
+
+function selectAll(): void {
+  // Only select enabled repositories
+  selectedRepos.value = availableRepos.value
+    .filter((repo: UserRepository) => repo.is_enabled !== false)
+    .map((repo: UserRepository) => repo.name)
+  emit('repos-changed', selectedRepos.value)
+}
+
+function selectNone(): void {
+  selectedRepos.value = []
+  emit('repos-changed', selectedRepos.value)
+}
+
+function toggleSelector(): void {
+  showSelector.value = !showSelector.value
+}
+
+function formatDate(dateString: string | null): string {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  const currentYear = new Date().getFullYear()
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    year: date.getFullYear() !== currentYear ? 'numeric' : undefined
+  })
 }
 </script>
 

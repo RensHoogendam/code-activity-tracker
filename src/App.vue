@@ -1,41 +1,53 @@
-<script setup>
-import { ref, onMounted, provide, computed } from 'vue'
-import { useRoute } from 'vue-router'
+<script setup lang="ts">
+import { ref, onMounted, provide, type Ref } from 'vue'
 import AppNavigation from './components/AppNavigation.vue'
-import LoadingSpinner from './components/LoadingSpinner.vue'
 import bitbucketService from './services/bitbucketService'
 
-const route = useRoute()
+import type { 
+  AppFilters, 
+  ProcessedCommit, 
+  UserRepository,
+  TestResult
+} from './types/bitbucket'
 
-const isAuthenticated = ref(false)
-const isLoading = ref(false)
-const hoursData = ref([])
-const filteredData = ref([])
-const error = ref(null)
-const lastUpdated = ref(null)
-const selectedRepos = ref([])
+import {
+  HOURS_DATA_KEY,
+  FILTERED_DATA_KEY,
+  FILTERS_KEY,
+  IS_LOADING_KEY,
+  IS_AUTHENTICATED_KEY
+} from './types/vue'
 
-const filters = ref({
+// Reactive state with proper typing
+const isAuthenticated: Ref<boolean> = ref(false)
+const isLoading: Ref<boolean> = ref(false)
+const hoursData: Ref<ProcessedCommit[]> = ref([])
+const filteredData: Ref<ProcessedCommit[]> = ref([])
+const error: Ref<string | null> = ref(null)
+const lastUpdated: Ref<Date | null> = ref(null)
+const selectedRepos: Ref<string[]> = ref([])
+
+const filters: Ref<AppFilters> = ref({
   repo: '',
   dateRange: 12,
   author: 'Rens Hoogendam',
   type: 'all' // all, commits, pullrequests
 })
 
-// Provide data to child components
-provide('hoursData', hoursData)
-provide('filteredData', filteredData)
-provide('filters', filters)
-provide('isLoading', isLoading)
-provide('isAuthenticated', isAuthenticated)
+// Provide data to child components with typed keys
+provide(HOURS_DATA_KEY, hoursData)
+provide(FILTERED_DATA_KEY, filteredData)
+provide(FILTERS_KEY, filters)
+provide(IS_LOADING_KEY, isLoading)
+provide(IS_AUTHENTICATED_KEY, isAuthenticated)
 
-onMounted(async () => {
+onMounted(async (): Promise<void> => {
   // Check if credentials are available
   isAuthenticated.value = bitbucketService.hasCredentials()
   
   // If we have credentials, test them and fetch initial data
   if (isAuthenticated.value) {
-    const testResult = await bitbucketService.testAuthentication()
+    const testResult: TestResult = await bitbucketService.testAuthentication()
     console.log("🚀 ~ testResult:", testResult.success)
     if (testResult.success) {
       console.log('✅ Authentication successful')
@@ -50,13 +62,13 @@ onMounted(async () => {
   }
 })
 
-async function loadUserRepositories() {
+async function loadUserRepositories(): Promise<void> {
   try {
-    const userRepos = await bitbucketService.fetchUserRepositories()
+    const userRepos: UserRepository[] = await bitbucketService.fetchUserRepositories()
     // Get enabled repositories in workspace/repo format
     selectedRepos.value = userRepos
-      .filter(repo => repo.is_enabled !== false)  
-      .map(repo => `${repo.workspace}/${repo.name}`)
+      .filter((repo: UserRepository) => repo.is_enabled !== false)  
+      .map((repo: UserRepository) => `${repo.workspace}/${repo.name}`)
     
     console.log(`✅ Loaded ${selectedRepos.value.length} enabled repositories:`, selectedRepos.value)
   } catch (err) {
@@ -65,7 +77,7 @@ async function loadUserRepositories() {
   }
 }
 
-async function fetchHoursData(forceRefresh = false) {
+async function fetchHoursData(forceRefresh: boolean = false): Promise<void> {
   if (!isAuthenticated.value) {
     console.warn('Not authenticated - cannot fetch data')
     return
@@ -75,16 +87,23 @@ async function fetchHoursData(forceRefresh = false) {
   error.value = null
   
   try {
-    const data = await bitbucketService.fetchAllData(filters.value.dateRange, selectedRepos.value, forceRefresh)
+    const data: ProcessedCommit[] = await bitbucketService.fetchAllData(
+      filters.value.dateRange, 
+      selectedRepos.value, 
+      forceRefresh
+    )
     hoursData.value = data
     applyFilters()
     lastUpdated.value = new Date()
-  } catch (err) {
+  } catch (err: unknown) {
     error.value = 'Failed to fetch data from Bitbucket API'
     console.error('Fetch error:', err)
     
     // If it's an auth error, clear authentication
-    if (err.message && (err.message.includes('credentials') || err.message.includes('401'))) {
+    if (err instanceof Error && err.message && (
+      err.message.includes('credentials') || 
+      err.message.includes('401')
+    )) {
       isAuthenticated.value = false
     }
   } finally {
@@ -92,26 +111,26 @@ async function fetchHoursData(forceRefresh = false) {
   }
 }
 
-function handleForceRefresh() {
+function handleForceRefresh(): void {
   console.log('Force refreshing data (bypassing cache)...')
   fetchHoursData(true)
 }
 
-function handleClearCache() {
+function handleClearCache(): void {
   bitbucketService.clearCache()
   console.log('Cache cleared')
 }
 
-function handleReposChanged(repos) {
+function handleReposChanged(repos: string[]): void {
   selectedRepos.value = repos
   // Reset the bitbucket service repos to force re-initialization
-  bitbucketService.config.repos = []
+  bitbucketService.clearCache()
   
   // Don't auto-fetch - let user click refresh when ready
   console.log(`Selected ${repos.length} repositories`)
 }
 
-function applyFilters(newFilters = {}) {
+function applyFilters(newFilters: Partial<AppFilters> = {}): void {
   const oldDateRange = filters.value.dateRange
   filters.value = { ...filters.value, ...newFilters }
   
@@ -122,31 +141,27 @@ function applyFilters(newFilters = {}) {
     return // fetchHoursData will call applyFilters again after fetching
   }
   
-  let filtered = hoursData.value
+  let filtered: ProcessedCommit[] = hoursData.value
   
   if (filters.value.repo) {
-    filtered = filtered.filter(item => item.repo === filters.value.repo)
+    filtered = filtered.filter((item: ProcessedCommit) => item.repo === filters.value.repo)
   }
   
   if (filters.value.type !== 'all') {
     if (filters.value.type === 'commits') {
-      filtered = filtered.filter(item => item.commit_hash)
+      filtered = filtered.filter((item: ProcessedCommit) => item.commit_hash)
     } else if (filters.value.type === 'pullrequests') {
-      filtered = filtered.filter(item => !item.commit_hash)
+      filtered = filtered.filter((item: ProcessedCommit) => !item.commit_hash)
     }
   }
   
   filteredData.value = filtered
 }
 
-function handleExport() {
+function handleExport(): void {
   // TODO: Implement data export functionality
   console.log('Export functionality to be implemented')
 }
-
-onMounted(() => {
-  // Don't auto-fetch - wait for user to select repos and click refresh
-})
 </script>
 
 <template>

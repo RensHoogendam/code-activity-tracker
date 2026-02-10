@@ -1,15 +1,41 @@
-<script setup>
+<script setup lang="ts">
 import { RotateCw, Settings, Trash2 } from 'lucide-vue-next'
 
-const props = defineProps({
-  lastUpdated: Date,
-  isLoading: Boolean,
-  filters: Object
+import type { AppFilters } from '../types/bitbucket'
+
+function handleSelectChange(event: Event): void {
+  const target = event.target as HTMLSelectElement
+  emit('filter-change', { dateRange: parseInt(target.value) })
+}
+
+// Props with proper typing
+interface Props {
+  lastUpdated: Date | null
+  isLoading: boolean
+  filters: AppFilters
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  lastUpdated: null,
+  isLoading: false,
+  filters: () => ({
+    repo: '',
+    dateRange: 12,
+    author: 'Rens Hoogendam',
+    type: 'all'
+  })
 })
 
-const emit = defineEmits(['refresh', 'force-refresh', 'clear-cache', 'filter-change'])
+// Emits with proper typing
+const emit = defineEmits<{
+  'refresh': []
+  'force-refresh': []
+  'clear-cache': []
+  'filter-change': [filters: Partial<AppFilters>]
+}>()
 
-function formatLastUpdated(date) {
+// Methods with proper typing
+function formatLastUpdated(date: Date | null): string {
   if (!date) return 'Never'
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -17,10 +43,6 @@ function formatLastUpdated(date) {
     hour: '2-digit',
     minute: '2-digit'
   }).format(date)
-}
-
-function onFilterChange(newFilters) {
-  emit('filter-change', newFilters)
 }
 </script>
 
@@ -40,7 +62,7 @@ function onFilterChange(newFilters) {
           <label class="control-label">Time period:</label>
           <select 
             :value="filters.dateRange" 
-            @change="onFilterChange({ dateRange: parseInt($event.target.value) })"
+             @change="handleSelectChange($event)"
             class="period-select"
           >
             <option value="1">Today</option>

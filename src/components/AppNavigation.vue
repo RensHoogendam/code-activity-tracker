@@ -1,53 +1,37 @@
-<script setup>
-import { ref, computed } from 'vue'
+<script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { BarChart3, ClipboardList, Settings } from 'lucide-vue-next'
 
-const props = defineProps({
-  lastUpdated: Date,
-  isLoading: Boolean,
-  filters: Object
+import type { AppFilters } from '../types/bitbucket'
+
+// Props with proper typing
+interface Props {
+  lastUpdated: Date | null
+  isLoading: boolean
+  filters: AppFilters
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  lastUpdated: null,
+  isLoading: false,
+  filters: () => ({
+    repo: '',
+    dateRange: 12,
+    author: 'Rens Hoogendam',
+    type: 'all'
+  })
 })
 
-const emit = defineEmits(['refresh', 'force-refresh', 'clear-cache', 'filter-change'])
+// Emits with proper typing
+const emit = defineEmits<{
+  'refresh': []
+  'force-refresh': []
+  'clear-cache': []
+  'filter-change': [filters: Partial<AppFilters>]
+}>()
 
+// Reactive state
 const route = useRoute()
-const showCacheMenu = ref(false)
-
-const currentPageTitle = computed(() => {
-  if (route.path === '/details') return 'Details'
-  if (route.path === '/settings') return 'Settings'
-  return 'Dashboard'
-})
-
-function formatLastUpdated(date) {
-  if (!date) return 'Never'
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date)
-}
-
-function handleRefresh() {
-  emit('refresh')
-  showCacheMenu.value = false
-}
-
-function handleForceRefresh() {
-  emit('force-refresh')
-  showCacheMenu.value = false
-}
-
-function handleClearCache() {
-  emit('clear-cache')
-  showCacheMenu.value = false
-}
-
-function onFilterChange(newFilters) {
-  emit('filter-change', newFilters)
-}
 </script>
 
 <template>

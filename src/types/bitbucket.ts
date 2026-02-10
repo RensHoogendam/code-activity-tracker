@@ -77,13 +77,23 @@ export interface ProcessedPullRequest {
   ticket_source: string | null;
 }
 
-export interface ProcessedCommit extends ProcessedPullRequest {
+export interface ProcessedCommit {
   commit_hash: string;
   commit_date: string;
   commit_author_raw: string;
   commit_message: string;
+  repo: string;
   branch?: string | null; // New: branch information
   pr_state?: 'MERGED' | 'OPEN' | 'DECLINED' | 'SUPERSEDED' | null; // New: PR state
+  ticket: string | null;
+  ticket_source: string | null;
+  // PR-specific fields - null for direct commits
+  pr: string | null;
+  pr_id: number | null;
+  pr_author_display_name: string | null;
+  pr_created_on: string | null;
+  pr_updated_on: string | null;
+  pr_links_commits_href: string | null;
 }
 
 export interface BitbucketServiceConfig {
@@ -135,4 +145,77 @@ export interface RepositoryToggleResponse {
   message: string;
   is_enabled: boolean;
   repository?: UserRepository;
+}
+
+// UI and Application Types
+export interface AppFilters {
+  repo: string;
+  dateRange: number;
+  author: string;
+  type: 'all' | 'commits' | 'pullrequests';
+}
+
+export interface DashboardMetrics {
+  totalCommits: number;
+  totalPRs: number;
+  uniqueTickets: number;
+  activeRepos: number;
+  commitsTrend: number;
+  prsTrend: number;
+  ticketsTrend: number;
+  reposTrend: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: 'commit' | 'pull_request';
+  repository: string;
+  repo: string;
+  date: string;
+  message?: string;
+  title?: string;
+  pr_title?: string;
+  ticket?: string | null;
+  ticket_source?: string | null;
+  commit_hash?: string;
+  pr_id?: number;
+  branch?: string | null;
+  pr_state?: 'MERGED' | 'OPEN' | 'DECLINED' | 'SUPERSEDED' | null;
+}
+
+export interface SortConfig {
+  field: string;
+  direction: 'asc' | 'desc';
+}
+
+export interface ChartDatapoint {
+  date: string;
+  commits: number;
+  pullRequests: number;
+}
+
+export interface RepoActivity {
+  name: string;
+  commits: number;
+  count: number; // Alias for commits for backward compatibility
+  pullRequests: number;
+  lastActivity: string;
+}
+
+// Authentication and Service Status
+export interface AuthenticationState {
+  isAuthenticated: boolean;
+  hasCredentials: boolean;
+  lastChecked?: Date;
+}
+
+export interface ServiceStatus {
+  isLoading: boolean;
+  error: string | null;
+  lastUpdated: Date | null;
+}
+
+export interface TestResult {
+  success: boolean;
+  message: string;
 }

@@ -1,13 +1,38 @@
-<script setup>
-const props = defineProps({
-  filters: Object,
-  repos: Array
+<script setup lang="ts">
+import type { AppFilters } from '../types/bitbucket'
+
+// Props with proper typing
+interface Props {
+  filters: AppFilters
+  repos: string[]
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  filters: () => ({
+    repo: '',
+    dateRange: 12,
+    author: 'Rens Hoogendam',
+    type: 'all'
+  }),
+  repos: () => []
 })
 
-const emit = defineEmits(['filter-change'])
+// Emits with proper typing
+const emit = defineEmits<{
+  'filter-change': [filters: Partial<AppFilters>]
+}>()
 
-function updateFilter(key, value) {
+function updateFilter<K extends keyof AppFilters>(key: K, value: AppFilters[K]): void {
   emit('filter-change', { [key]: value })
+}
+
+function handleSelectChange(event: Event, key: keyof AppFilters): void {
+  const target = event.target as HTMLSelectElement
+  if (key === 'dateRange') {
+    updateFilter(key, parseInt(target.value))
+  } else {
+    updateFilter(key as any, target.value as any)
+  }
 }
 </script>
 
@@ -17,7 +42,7 @@ function updateFilter(key, value) {
       <label>Repository:</label>
       <select 
         :value="filters.repo" 
-        @change="updateFilter('repo', $event.target.value)"
+        @change="handleSelectChange($event, 'repo')"
       >
         <option value="">All Repositories</option>
         <option v-for="repo in repos" :key="repo" :value="repo">
@@ -30,7 +55,7 @@ function updateFilter(key, value) {
       <label>Date Range:</label>
       <select 
         :value="filters.dateRange" 
-        @change="updateFilter('dateRange', parseInt($event.target.value))"
+        @change="handleSelectChange($event, 'dateRange')"
       >
         <option :value="3">Last 3 days</option>
         <option :value="7">Last week</option>
@@ -43,7 +68,7 @@ function updateFilter(key, value) {
       <label>Type:</label>
       <select 
         :value="filters.type" 
-        @change="updateFilter('type', $event.target.value)"
+        @change="handleSelectChange($event, 'type')"
       >
         <option value="all">All</option>
         <option value="commits">Commits Only</option>

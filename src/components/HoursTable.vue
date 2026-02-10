@@ -1,16 +1,26 @@
-<script setup>
-import { ref, computed } from 'vue'
+<script setup lang="ts">
+import { ref, computed, type Ref } from 'vue'
 
-const props = defineProps({
-  data: Array,
-  isLoading: Boolean
+import type { ProcessedCommit } from '../types/bitbucket'
+
+// Props with proper typing
+interface Props {
+  data: ProcessedCommit[]
+  isLoading: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  data: () => [],
+  isLoading: false
 })
 
-const sortField = ref('date')
-const sortDirection = ref('desc')
-const searchQuery = ref('')
+// Reactive state with proper typing
+const sortField: Ref<string> = ref('date')
+const sortDirection: Ref<'asc' | 'desc'> = ref('desc')
+const searchQuery: Ref<string> = ref('')
 
-const filteredAndSortedData = computed(() => {
+// Computed properties with explicit return types
+const filteredAndSortedData = computed((): ProcessedCommit[] => {
   if (!props.data) return []
   
   let filtered = props.data
@@ -18,29 +28,29 @@ const filteredAndSortedData = computed(() => {
   // Search filter
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(item => 
-      item.repository?.toLowerCase().includes(query) ||
-      item.message?.toLowerCase().includes(query) ||
-      item.pr_title?.toLowerCase().includes(query)
+    filtered = filtered.filter((item: ProcessedCommit) => 
+      item.repo?.toLowerCase().includes(query) ||
+      item.commit_message?.toLowerCase().includes(query) ||
+      item.pr?.toLowerCase().includes(query)
     )
   }
   
   // Sort
-  filtered.sort((a, b) => {
-    let aValue, bValue
+  filtered.sort((a: ProcessedCommit, b: ProcessedCommit) => {
+    let aValue: any, bValue: any
     
     switch (sortField.value) {
       case 'date':
-        aValue = new Date(a.date)
-        bValue = new Date(b.date)
+        aValue = new Date(a.commit_date || a.pr_updated_on || '1970-01-01')
+        bValue = new Date(b.commit_date || b.pr_updated_on || '1970-01-01')
         break
       case 'repo':
-        aValue = a.repository || ''
-        bValue = b.repository || ''
+        aValue = a.repo || ''
+        bValue = b.repo || ''
         break
       case 'type':
-        aValue = a.type || ''
-        bValue = b.type || ''
+        aValue = a.commit_hash ? 'commit' : 'pullrequest'
+        bValue = b.commit_hash ? 'commit' : 'pullrequest'
         break
       default:
         return 0
@@ -54,7 +64,8 @@ const filteredAndSortedData = computed(() => {
   return filtered
 })
 
-function sort(field) {
+// Functions with proper typing
+function sort(field: string): void {
   if (sortField.value === field) {
     sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
   } else {
@@ -63,7 +74,7 @@ function sort(field) {
   }
 }
 
-function formatDate(dateString) {
+function formatDate(dateString: string | undefined): string {
   if (!dateString) return ''
   const date = new Date(dateString)
   return new Intl.DateTimeFormat('en-US', {
@@ -74,23 +85,21 @@ function formatDate(dateString) {
   }).format(date)
 }
 
-function getItemType(item) {
-  return item.type === 'pull_request' ? 'pr' : item.type
+function getItemType(item: ProcessedCommit): 'commit' | 'pr' {
+  return item.commit_hash ? 'commit' : 'pr'
 }
 
-function getDisplayTitle(item) {
+function getDisplayTitle(item: ProcessedCommit): string {
   console.log('Getting display title for item:', item)
   
-  if (item.type === 'commit') {
-    return item.message?.split('\n')[0] || 'Commit'
-  } else if (item.type === 'pull_request') {
-    return item.title || 'Pull Request'
+  if (item.commit_hash) {
+    return item.commit_message?.split('\n')[0] || 'Commit'
+  } else {
+    return item.pr || 'Pull Request'
   }
-  
-  return 'Unknown'
 }
 
-function extractIssueId(item) {
+function extractIssueId(item: ProcessedCommit): string | null {
   // Use the ticket field from backend if available
   if (item.ticket) {
     return item.ticket
@@ -102,11 +111,11 @@ function extractIssueId(item) {
   return match ? match[1] : null
 }
 
-function getIssueUrl(issueId) {
+function getIssueUrl(issueId: string): string {
   return `https://atabix.atlassian.net/browse/${issueId}`
 }
 
-async function copyToClipboard(text) {
+async function copyToClipboard(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text)
     // Could add a toast notification here
@@ -115,7 +124,7 @@ async function copyToClipboard(text) {
   }
 }
 
-function getRepoDisplayName(repo) {
+function getRepoDisplayName(repo: string | undefined): string {
   return repo?.replace('atabix/', '').replace('atabase-', '') || ''
 }
 </script>
@@ -182,11 +191,11 @@ function getRepoDisplayName(repo) {
             </td>
             
             <td class="repo-cell">
-              {{ getRepoDisplayName(item.repository) }}
+              {{ getRepoDisplayName(item.repo) }}
             </td>
             
             <td class="date-cell">
-              {{ formatDate(item.date) }}
+              {{ formatDate(item.commit_date || item.pr_updated_on || '') }}
             </td>
             
             <td class="title-cell">
@@ -205,14 +214,16 @@ function getRepoDisplayName(repo) {
             <td class="issue-cell">
               <div v-if="extractIssueId(item)" class="issue-actions">
                 <button 
+                  v-if="extractIssueId(item)"
                   class="copy-btn"
-                  @click="copyToClipboard(extractIssueId(item))"
+                  @click="copyToClipboard(extractIssueId(item)!)"
                   :title="`Copy ${extractIssueId(item)} to clipboard`"
                 >
                   {{ extractIssueId(item) }}
                 </button>
                 <a 
-                  :href="getIssueUrl(extractIssueId(item))"
+                  v-if="extractIssueId(item)"
+                  :href="getIssueUrl(extractIssueId(item)!)"
                   target="_blank"
                   class="issue-link"
                   :title="`Open ${extractIssueId(item)} in Jira`"

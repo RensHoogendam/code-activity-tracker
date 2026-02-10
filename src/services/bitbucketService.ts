@@ -43,9 +43,8 @@ class BitbucketService {
       baseUrl: `${this.apiBase}/bitbucket` // Laravel backend endpoints
     }
     
-    // Get workspaces from env
     const workspaces = import.meta.env.VITE_BITBUCKET_WORKSPACES?.split(',') || ['atabix']
-    this.config.workspaces = workspaces.map(ws => ws.trim())
+    this.config.workspaces = workspaces.map((ws: string) => ws.trim())
     
     // Initialize cache
     this.cache = {
@@ -137,38 +136,6 @@ class BitbucketService {
 
   private getUpdateOnFilter(maxDays: number): string {
     return this.getUnixDateToFilter(this.getDateNowMinusDays(maxDays))
-  }
-
-  // Deduplicate commits to avoid showing the same commit twice
-  // (once from PR and once from repository direct fetch)
-  private deduplicateCommits(items: (ProcessedCommit | ProcessedPullRequest)[]): (ProcessedCommit | ProcessedPullRequest)[] {
-    const seen = new Set<string>()
-    const deduplicated: (ProcessedCommit | ProcessedPullRequest)[] = []
-    
-    for (const item of items) {
-      // Create a unique identifier for each item
-      let key: string
-      
-      if ('commit_hash' in item && item.commit_hash) {
-        // For commits, use hash + repo as the unique key
-        key = `commit:${item.repo}:${item.commit_hash}`
-      } else if ('pr_id' in item && item.pr_id) {
-        // For pull requests, use PR ID + repo as the unique key
-        key = `pr:${item.repo}:${item.pr_id}`
-      } else {
-        // Fallback - should not happen but handle gracefully
-        key = `unknown:${Math.random()}`
-      }
-      
-      if (!seen.has(key)) {
-        seen.add(key)
-        deduplicated.push(item)
-      } else {
-        console.log(`🔄 Deduplicated duplicate item: ${key}`)
-      }
-    }
-    
-    return deduplicated
   }
 
   // Cache utility methods
@@ -366,9 +333,10 @@ class BitbucketService {
       
     } catch (error) {
       console.error('Error enabling repository:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to enable repository'
       return {
         success: false,
-        message: error.message || 'Failed to enable repository'
+        message: errorMessage
       }
     }
   }
@@ -401,9 +369,10 @@ class BitbucketService {
       
     } catch (error) {
       console.error('Error disabling repository:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to disable repository'
       return {
         success: false,
-        message: error.message || 'Failed to disable repository'
+        message: errorMessage
       }
     }
   }
@@ -436,9 +405,10 @@ class BitbucketService {
       
     } catch (error) {
       console.error('Error toggling repository status:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to toggle repository status'
       return {
         success: false,
-        message: error.message || 'Failed to toggle repository status',
+        message: errorMessage,
         is_enabled: false
       }
     }
@@ -479,9 +449,10 @@ class BitbucketService {
       
     } catch (error) {
       console.error('Error saving repository selections:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save repository selections'
       return {
         success: false,
-        message: error.message || 'Failed to save repository selections'
+        message: errorMessage
       }
     }
   }
@@ -554,6 +525,7 @@ class BitbucketService {
   }
 
   // Get all pages of pull requests
+  // @ts-expect-error - Method may be used in future, keeping for potential utility
   private async getAllFetchListPullRequests({ repo, states, sort, updatedOn }: FetchPullRequestsParams): Promise<({ next?: string; values: CompactPullRequest[] } | undefined)[]> {
     const maxPages = 3  // Reduced from 10 to limit API calls
     let pages = []
@@ -640,25 +612,6 @@ class BitbucketService {
     }
   }
 
-  // Get all pull requests for all repositories
-  private async getAllReposListPullRequests(maxDays: number): Promise<ProcessedPullRequest[]> {
-    let allPullRequests: ProcessedPullRequest[] = []
-
-    for (const repo of this.config.repos) {
-      const pullRequests = await this.getAllFetchListPullRequests({
-        repo,
-        states: ['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'],
-        sort: '-updated_on',
-        updatedOn: `>=${this.getUpdateOnFilter(maxDays)}`,
-      })
-
-      const pullRequestsCompact = this.getAllCompactListPullRequests(repo, pullRequests.filter(Boolean))
-      allPullRequests = [...allPullRequests, ...pullRequestsCompact]
-    }
-
-    return allPullRequests
-  }
-
   // Fetch commits directly from repository (not through PRs) with server-side author filtering
   private async getFetchRepositoryCommits(repo: string, since: string, sort: string = '-date'): Promise<BitbucketApiResponse<BitbucketCommit> | undefined> {
     const dateFilter = since.length ? `date>=${since}` : ''
@@ -730,6 +683,7 @@ class BitbucketService {
   }
 
   // Get all commits for all pull requests
+  // @ts-expect-error - Method may be used in future, keeping for potential utility
   private async getAllReposListCommits(pullRequests: ProcessedPullRequest[], maxDays: number): Promise<(ProcessedCommit | ProcessedPullRequest)[]> {
     if (!pullRequests.length) return []
 
@@ -812,6 +766,7 @@ class BitbucketService {
   }
 
   // Transform pull request data
+  // @ts-expect-error - Method may be used in future, keeping for potential utility
   private getAllCompactListPullRequests(repo: string, data: ({ next?: string; values: CompactPullRequest[] } | undefined)[]): ProcessedPullRequest[] {
     if (!data) return []
 
@@ -936,7 +891,7 @@ class BitbucketService {
         commit_date: item.date,
         commit_message: item.message || null,
         commit_author_raw: item.author_raw || null,
-        pr_id: item.pull_request_id || null,
+        pr_id: (item as any).pull_request_id || null,
         pr_author_display_name: item.pr_author || null,
         pr_created_on: item.pr_created_on || null,
         pr_updated_on: item.pr_updated_on || null,
@@ -1001,56 +956,12 @@ class BitbucketService {
   }
 }
 
-// Export singleton instance with additional methods
+// Export singleton instance with proper typing
 export const bitbucketService = new BitbucketService()
 
-// Extend the service instance with additional convenience methods
-interface ExtendedBitbucketService extends BitbucketService {
-  getAvailableRepositories(): Promise<BitbucketRepository[]>
-  getUserRepositories(): Promise<UserRepository[]>
-  enableRepository(repositoryId: number): Promise<RepositoryStatusResponse>
-  disableRepository(repositoryId: number): Promise<RepositoryStatusResponse>
-  toggleRepositoryStatus(repositoryName: string): Promise<RepositoryToggleResponse>
-  saveUserRepositorySelections(repositoryNames: string[]): Promise<RepositoryStatusResponse>
-  clearCache(pattern?: string | null): void
-  fetchAllDataFresh(maxDays?: number, selectedRepos?: string[] | null): Promise<ProcessedCommit[]>
-  testAuthentication(): Promise<{ success: boolean; message: string; userInfo?: any }>
-}
-
-// Add convenience methods to the service instance
-const extendedService = bitbucketService as ExtendedBitbucketService
-
-extendedService.getAvailableRepositories = async function(): Promise<BitbucketRepository[]> {
-  return await this.fetchAllRepositories()
-}
-
-extendedService.getUserRepositories = async function(): Promise<UserRepository[]> {
-  return await this.fetchUserRepositories()
-}
-
-extendedService.enableRepository = async function(repositoryId: number): Promise<RepositoryStatusResponse> {
-  return await this.enableRepository(repositoryId)
-}
-
-extendedService.disableRepository = async function(repositoryId: number): Promise<RepositoryStatusResponse> {
-  return await this.disableRepository(repositoryId)
-}
-
-extendedService.toggleRepositoryStatus = async function(repositoryName: string): Promise<RepositoryToggleResponse> {
-  return await BitbucketService.prototype.toggleRepositoryStatus.call(this, repositoryName)
-}
-
-extendedService.saveUserRepositorySelections = async function(repositoryNames: string[]): Promise<RepositoryStatusResponse> {
-  return await BitbucketService.prototype.saveUserRepositorySelections.call(this, repositoryNames)
-}
-
-extendedService.clearCache = function(pattern: string | null = null): void {
-  return this.clearCache(pattern)
-}
-
-extendedService.fetchAllDataFresh = function(maxDays: number = 12, selectedRepos: string[] | null = null): Promise<ProcessedCommit[]> {
+// Additional convenience methods for the service
+bitbucketService.fetchAllData = function(maxDays: number = 12, selectedRepos: string[] | null = null): Promise<ProcessedCommit[]> {
   return this.fetchAllData(maxDays, selectedRepos, true) // Force refresh
 }
 
-
-export default extendedService
+export default bitbucketService

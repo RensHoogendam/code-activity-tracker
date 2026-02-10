@@ -74,86 +74,88 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
+import { computed } from 'vue'
 import HoursTable from './HoursTable.vue'
 import HoursFilters from './HoursFilters.vue'
 import PageToolbar from './PageToolbar.vue'
 
-export default {
-  name: 'DetailsPage',
-  components: {
-    HoursTable,
-    HoursFilters,
-    PageToolbar
-  },
-  props: {
-    data: {
-      type: Array,
-      default: () => []
-    },
-    filters: {
-      type: Object,
-      default: () => ({})
-    },
-    isLoading: {
-      type: Boolean,
-      default: false
-    },
-    lastUpdated: {
-      type: Date,
-      default: null
-    },
-    error: {
-      type: String,
-      default: null
-    }
-  },
-  emits: ['filter-change', 'export', 'refresh', 'force-refresh', 'clear-cache'],
-  computed: {
-    availableRepos() {
-      return [...new Set(this.data.map(item => item.repo))].sort()
-    },
-    
-    filteredData() {
-      let filtered = [...this.data]
-      
-      if (this.filters.repo) {
-        filtered = filtered.filter(item => item.repo === this.filters.repo)
-      }
-      
-      if (this.filters.type && this.filters.type !== 'all') {
-        if (this.filters.type === 'commits') {
-          filtered = filtered.filter(item => item.commit_hash)
-        } else if (this.filters.type === 'pullrequests') {
-          filtered = filtered.filter(item => !item.commit_hash)
-        }
-      }
-      
-      return filtered
-    },
-    
-    commitCount() {
-      return this.filteredData.filter(item => item.commit_hash).length
-    },
-    
-    prCount() {
-      return this.filteredData.filter(item => !item.commit_hash).length
-    },
-    
-    uniqueTickets() {
-      const tickets = new Set(
-        this.filteredData
-          .filter(item => item.ticket)
-          .map(item => item.ticket)
-      )
-      return tickets.size
-    }
-  },
-  methods: {
-    onFiltersChange(newFilters) {
-      this.$emit('filter-change', newFilters)
+import type { ProcessedCommit, AppFilters } from '../types/bitbucket'
+
+// Props with proper typing
+interface Props {
+  data: ProcessedCommit[]
+  filters: AppFilters
+  isLoading: boolean
+  lastUpdated: Date | null
+  error: string | null
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  data: () => [],
+  filters: () => ({
+    repo: '',
+    dateRange: 12,
+    author: 'Rens Hoogendam',
+    type: 'all'
+  }),
+  isLoading: false,
+  lastUpdated: null,
+  error: null
+})
+
+// Emits with proper typing
+const emit = defineEmits<{
+  'filter-change': [filters: Partial<AppFilters>]
+  'export': []
+  'refresh': []
+  'force-refresh': []
+  'clear-cache': []
+}>()
+
+// Computed properties with proper typing
+const availableRepos = computed((): string[] => {
+  return [...new Set(props.data.map((item: ProcessedCommit) => item.repo))].sort()
+})
+
+const filteredData = computed((): ProcessedCommit[] => {
+  let filtered: ProcessedCommit[] = [...props.data]
+  
+  if (props.filters.repo) {
+    filtered = filtered.filter((item: ProcessedCommit) => item.repo === props.filters.repo)
+  }
+  
+  if (props.filters.type && props.filters.type !== 'all') {
+    if (props.filters.type === 'commits') {
+      filtered = filtered.filter((item: ProcessedCommit) => item.commit_hash)
+    } else if (props.filters.type === 'pullrequests') {
+      filtered = filtered.filter((item: ProcessedCommit) => !item.commit_hash)
     }
   }
+  
+  return filtered
+})
+
+const commitCount = computed((): number => {
+  return filteredData.value.filter((item: ProcessedCommit) => item.commit_hash).length
+})
+
+const prCount = computed((): number => {
+  return filteredData.value.filter((item: ProcessedCommit) => !item.commit_hash).length
+})
+
+const uniqueTickets = computed((): number => {
+  const tickets = new Set(
+    filteredData.value
+      .filter((item: ProcessedCommit) => item.ticket)
+      .map((item: ProcessedCommit) => item.ticket)
+  )
+  return tickets.size
+})
+
+// Methods with proper typing
+function onFiltersChange(newFilters: Partial<AppFilters>): void {
+  emit('filter-change', newFilters)
 }
 </script>
 

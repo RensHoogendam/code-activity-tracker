@@ -1,17 +1,29 @@
-<script setup>
-import { ref } from 'vue'
+<script setup lang="ts">
+import { ref, type Ref } from 'vue'
 import RepoSelector from './RepoSelector.vue'
 
-const props = defineProps({
-  lastUpdated: Date,
-  isLoading: Boolean
+// Props with proper typing
+interface Props {
+  lastUpdated: Date | null
+  isLoading: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  lastUpdated: null,
+  isLoading: false
 })
 
-const emit = defineEmits(['refresh', 'force-refresh', 'clear-cache', 'repos-changed'])
+// Emits with proper typing
+const emit = defineEmits<{
+  'refresh': []
+  'force-refresh': []
+  'clear-cache': []
+  'repos-changed': [repos: string[]]
+}>()
 
-const showCacheMenu = ref(false)
+const showCacheMenu: Ref<boolean> = ref(false)
 
-function formatLastUpdated(date) {
+function formatLastUpdated(date: Date | null): string {
   if (!date) return 'Never'
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -21,22 +33,22 @@ function formatLastUpdated(date) {
   }).format(date)
 }
 
-function handleRefresh() {
+function handleRefresh(): void {
   emit('refresh')
   showCacheMenu.value = false
 }
 
-function handleForceRefresh() {
+function handleForceRefresh(): void {
   emit('force-refresh')
   showCacheMenu.value = false
 }
 
-function handleClearCache() {
+function handleClearCache(): void {
   emit('clear-cache')
   showCacheMenu.value = false
 }
 
-function handleReposChanged(repos) {
+function handleReposChanged(repos: string[]): void {
   emit('repos-changed', repos)
 }
 </script>
@@ -93,6 +105,7 @@ function handleReposChanged(repos) {
         <RepoSelector 
           @repos-changed="handleReposChanged"
           :compact="true"
+          :showStatus="false"
         />
       </div>
     </div>
@@ -110,42 +123,36 @@ function handleReposChanged(repos) {
 .container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 20px 0 20px;
+  padding: 0;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
-  margin-bottom: 20px;
+  padding: 20px 24px;
+  min-height: 80px;
 }
 
-.repo-section {
-  border-top: 1px solid rgba(255,255,255,0.2);
-  padding-top: 15px;
-  padding-bottom: 15px;
+.title-section {
+  flex: 1;
 }
 
 .title-section h1 {
-  font-size: 2.2rem;
+  margin: 0 0 4px 0;
+  font-size: 2rem;
   font-weight: 700;
-  margin-bottom: 4px;
+  color: white;
 }
 
 .subtitle {
-  opacity: 0.9;
+  margin: 0;
   font-size: 1rem;
+  opacity: 0.9;
+  color: white;
 }
 
 .actions-section {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.refresh-controls {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -162,11 +169,15 @@ function handleReposChanged(repos) {
 .label {
   opacity: 0.8;
   margin-bottom: 2px;
-  font-size: 0.8rem;
 }
 
 .time {
   font-weight: 600;
+}
+
+.refresh-controls {
+  display: flex;
+  gap: 8px;
 }
 
 .refresh-btn, .cache-btn {
@@ -176,9 +187,9 @@ function handleReposChanged(repos) {
   background: rgba(255,255,255,0.2);
   border: 1px solid rgba(255,255,255,0.3);
   color: white;
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -186,60 +197,21 @@ function handleReposChanged(repos) {
 }
 
 .cache-btn {
-  padding: 10px 12px;
+  padding: 12px;
   min-width: auto;
 }
 
-.refresh-btn:hover:not(:disabled), .cache-btn:hover:not(:disabled) {
+.refresh-btn:hover, .cache-btn:hover {
   background: rgba(255,255,255,0.3);
-  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.4);
 }
 
 .refresh-btn:disabled, .cache-btn:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
-.cache-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  background: white;
-  border: 1px solid #e1e5e9;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 1000;
-  margin-top: 4px;
-  min-width: 140px;
-}
-
-.cache-dropdown button {
-  display: block;
-  width: 100%;
-  padding: 8px 12px;
-  background: none;
-  border: none;
-  color: #2c3e50;
-  text-align: left;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.cache-dropdown button:hover {
-  background: #f8f9fa;
-}
-
-.cache-dropdown button:first-child {
-  border-radius: 6px 6px 0 0;
-}
-
-.cache-dropdown button:last-child {
-  border-radius: 0 0 6px 6px;
-  border-top: 1px solid #e1e5e9;
-}
-
-.spinning {
+.icon.spinning {
   animation: spin 1s linear infinite;
 }
 
@@ -248,26 +220,103 @@ function handleReposChanged(repos) {
   to { transform: rotate(360deg); }
 }
 
+.cache-menu {
+  position: relative;
+}
+
+.cache-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  overflow: hidden;
+  z-index: 1000;
+  min-width: 160px;
+}
+
+.cache-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: #374151;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cache-dropdown button:hover {
+  background: #f9fafb;
+}
+
+.repo-section {
+  border-top: 1px solid rgba(255,255,255,0.2);
+  padding: 16px 24px;
+}
+
+.repo-section .repo-selector {
+  margin-bottom: 0;
+}
+
+/* Responsive design */
 @media (max-width: 768px) {
   .header-content {
     flex-direction: column;
-    text-align: center;
-    gap: 15px;
-  }
-  
-  .title-section h1 {
-    font-size: 1.8rem;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px 20px;
   }
   
   .actions-section {
-    flex-direction: row;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     width: 100%;
-    justify-content: center;
-    gap: 15px;
+    gap: 12px;
   }
   
   .refresh-controls {
-    flex-direction: row;
+    justify-content: flex-end;
+  }
+  
+  .last-updated {
+    align-items: flex-start;
+    font-size: 0.8rem;
+  }
+  
+  .title-section h1 {
+    font-size: 1.5rem;
+  }
+  
+  .subtitle {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0;
+  }
+  
+  .header-content {
+    padding: 12px 16px;
+  }
+  
+  .repo-section {
+    padding: 12px 16px;
+  }
+  
+  .refresh-btn, .cache-btn {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+  
+  .cache-btn {
+    padding: 10px;
   }
 }
 </style>

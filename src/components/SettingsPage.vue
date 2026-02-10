@@ -1,56 +1,72 @@
-<script setup>
-import { ref, onMounted, computed } from 'vue'
+<script setup lang="ts">
+import { ref, onMounted, computed, type Ref } from 'vue'
 import { Save } from 'lucide-vue-next'
 import { bitbucketService } from '../services/bitbucketService'
 
-const emit = defineEmits(['repos-changed', 'repository-status-changed'])
+import type { 
+  BitbucketRepository, 
+  UserRepository,
+  RepositoryToggleResponse
+} from '../types/bitbucket'
 
-const loading = ref(false)
-const error = ref(null)
-const availableRepos = ref([])
-const selectedRepos = ref([])
-const searchQuery = ref('')
-const togglingRepos = ref(new Set())
+// Emits with proper typing
+const emit = defineEmits<{
+  'repos-changed': [repos: string[]]
+  'repository-status-changed': [data: { repository: UserRepository; enabled: boolean }]
+}>()
+
+// Reactive state with proper typing
+const loading: Ref<boolean> = ref(false)
+const error: Ref<string | null> = ref(null)
+const availableRepos: Ref<BitbucketRepository[]> = ref([])
+const selectedRepos: Ref<string[]> = ref([])
+const searchQuery: Ref<string> = ref('')
+const togglingRepos: Ref<Set<string>> = ref(new Set())
 
 // Computed filtered repositories based on search
-const filteredRepos = computed(() => {
+const filteredRepos = computed((): BitbucketRepository[] => {
   if (!searchQuery.value) return availableRepos.value
   
   const query = searchQuery.value.toLowerCase()
-  return availableRepos.value.filter(repo => 
+  return availableRepos.value.filter((repo: BitbucketRepository) => 
     repo.name.toLowerCase().includes(query) ||
     (repo.language && repo.language.toLowerCase().includes(query))
   )
 })
 
 // Load repositories on mount
-onMounted(async () => {
+onMounted(async (): Promise<void> => {
   await loadRepositories()
 })
 
-async function loadRepositories() {
+async function loadRepositories(): Promise<void> {
   loading.value = true
   error.value = null
   
   try {
     // Load user repositories with enable/disable status
-    availableRepos.value = await bitbucketService.fetchAllRepositories()
-    const userRepos = await bitbucketService.fetchUserRepositories()
+    const [allRepos, userRepos] = await Promise.all([
+      bitbucketService.fetchAllRepositories(),
+      bitbucketService.fetchUserRepositories()
+    ])
+    
+    availableRepos.value = allRepos
     
     // Select only enabled repositories by default (store in workspace/repo format)
     selectedRepos.value = userRepos
-      .filter(repo => repo.is_enabled !== false)
-      .map(repo => `${repo.workspace}/${repo.name}`)
+      .filter((repo: UserRepository) => repo.is_enabled !== false)
+      .map((repo: UserRepository) => `${repo.workspace}/${repo.name}`)
     
-  } catch (err) {
-    error.value = err.message
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
+    error.value = errorMessage
     console.error('Failed to load repositories:', err)
   } finally {
     loading.value = false
   }
 }
 
-async function toggleRepositoryStatus(repo) {
+async function toggleRepositoryStatus(repo: BitbucketRepository): Promise<void> {
   if (!repo.name || togglingRepos.value.has(repo.name)) {
     return
   }
@@ -58,17 +74,17 @@ async function toggleRepositoryStatus(repo) {
   togglingRepos.value.add(repo.name)
   
   try {
-    const response = await bitbucketService.toggleRepositoryStatus(repo.name)
+    const response: RepositoryToggleResponse = await bitbucketService.toggleRepositoryStatus(repo.name)
     
     if (response.success) {
       // Update the repo in our local data
-      const repoIndex = availableRepos.value.findIndex(r => r.name === repo.name)
+      const repoIndex = availableRepos.value.findIndex((r: BitbucketRepository) => r.name === repo.name)
       if (repoIndex !== -1) {
         availableRepos.value[repoIndex].is_enabled = response.is_enabled
         
         // Update selected repos based on new status
         const repoName = repo.name
-        const workspace = repo.workspace || availableRepos.value.find(r => r.name === repoName)?.workspace || 'unknown'
+        const workspace = repo.workspace || availableRepos.value.find((r: BitbucketRepository) => r.name === repoName)?.workspace || 'unknown'
         const fullRepoName = `${workspace}/${repoName}`
         const isSelected = selectedRepos.value.includes(fullRepoName)
         
@@ -78,31 +94,33 @@ async function toggleRepositoryStatus(repo) {
           emit('repos-changed', selectedRepos.value)
         } else if (!response.is_enabled && isSelected) {
           // Disable and deselect the repo
-          selectedRepos.value = selectedRepos.value.filter(name => name !== fullRepoName)
+          selectedRepos.value = selectedRepos.value.filter((name: string) => name !== fullRepoName)
           emit('repos-changed', selectedRepos.value)
         }
         
-        // Emit status change event
-        emit('repository-status-changed', {
-          repository: availableRepos.value[repoIndex],
-          enabled: response.is_enabled
-        })
+        // Emit status change event (casting for the event)
+        if (response.repository) {
+          emit('repository-status-changed', {
+            repository: response.repository,
+            enabled: response.is_enabled
+          })
+        }
         
         console.log(`Repository ${repo.name} ${response.is_enabled ? 'enabled' : 'disabled'}`)
       }
     } else {
       console.error('Failed to toggle repository status:', response.message)
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Error toggling repository status:', err)
   } finally {
     togglingRepos.value.delete(repo.name)
   }
 }
 
-function toggleRepo(repoName) {
+function toggleRepo(repoName: string): void {
   // Check if repo is disabled
-  const repo = availableRepos.value.find(r => r.name === repoName)
+  const repo = availableRepos.value.find((r: BitbucketRepository) => r.name === repoName)
   if (repo && repo.is_enabled === false) {
     return // Don't allow toggling disabled repositories
   }
@@ -130,7 +148,7 @@ function selectNone() {
   selectedRepos.value = []
 }
 
-function selectByLanguage(language) {
+function selectByLanguage(language: string): void {
   const reposWithLanguage = filteredRepos.value
     .filter(repo => repo.language === language && repo.is_enabled !== false)
     .map(repo => `${repo.workspace || 'unknown'}/${repo.name}`)
@@ -156,7 +174,7 @@ async function saveSettings() {
       emit('repos-changed', selectedRepos.value)
       
       // Show success message briefly
-      const successMessage = document.querySelector('.success-message')
+      const successMessage = document.querySelector('.success-message') as HTMLElement
       if (successMessage) {
         successMessage.style.display = 'block'
         setTimeout(() => {
@@ -168,7 +186,8 @@ async function saveSettings() {
       console.error('Failed to save repository selections:', response.message)
     }
   } catch (err) {
-    error.value = err.message || 'An error occurred while saving settings'
+    const errorMessage = err instanceof Error ? err.message : 'An error occurred while saving settings'
+    error.value = errorMessage
     console.error('Error saving repository selections:', err)
   } finally {
     loading.value = false
@@ -184,7 +203,7 @@ const availableLanguages = computed(() => {
   return Array.from(languages).sort()
 })
 
-function formatDate(dateString) {
+function formatDate(dateString: string): string {
   if (!dateString) return ''
   const date = new Date(dateString)
   return date.toLocaleDateString('en-US', { 
@@ -249,8 +268,8 @@ function formatDate(dateString) {
                 <span class="filter-label">Quick select:</span>
                 <button 
                   v-for="lang in availableLanguages" 
-                  :key="lang"
-                  @click="selectByLanguage(lang)"
+                  :key="lang as string"
+                  @click="selectByLanguage(lang as string)"
                   class="lang-btn"
                   :title="`Select all ${lang} repositories`"
                 >
