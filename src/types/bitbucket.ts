@@ -82,16 +82,19 @@ export interface ProcessedCommit extends ProcessedPullRequest {
   commit_date: string;
   commit_author_raw: string;
   commit_message: string;
+  branch?: string | null; // New: branch information
+  pr_state?: 'MERGED' | 'OPEN' | 'DECLINED' | 'SUPERSEDED' | null; // New: PR state
 }
 
 export interface BitbucketServiceConfig {
   apiToken: string;
   apiUsername: string;
   prAuthorDisplayName: string;
-  authorEmail: string;
   commitAuthorRaw: string;
+  authorEmail?: string; // New: author email for API filtering
   repos: string[];
   baseUrl: string;
+  workspaces?: string[]; // New: workspace configuration
 }
 
 export interface CacheData<T> {

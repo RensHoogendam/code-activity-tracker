@@ -881,14 +881,20 @@ class BitbucketService {
       
       console.log('🚀 Fetching fresh data via Laravel backend...')
       
-      // Use Laravel backend endpoint for commits and pull requests
+      // Use new Laravel backend endpoint for unified activity (commits + pull requests)
       const params = new URLSearchParams({
         days: maxDays.toString(),
         author: this.config.authorEmail || this.config.apiUsername // Use username/email instead of display name
       })
       
       // Build URL with repositories parameter manually to avoid double encoding
-      let url = `${this.apiBase}/bitbucket/commits?${params.toString()}`
+      let url = `${this.apiBase}/bitbucket/activity?${params.toString()}`
+      
+      // Add repository filtering if specified (avoid URLSearchParams encoding)
+      // if (selectedRepos && selectedRepos.length > 0) {
+      //   const reposParam = selectedRepos.join(',')
+      //   url += `&repositories=${reposParam}`
+      // }
       
       
       const response = await this.getFetch<{
@@ -901,12 +907,14 @@ class BitbucketService {
           author_raw?: string
           author_username?: string | null
           ticket?: string | null
+          branch?: string // New: branch information for commits
           // PR-specific fields
           pr_id?: number
           pr_title?: string
           pr_author?: string
           pr_created_on?: string
           pr_updated_on?: string
+          pr_state?: 'MERGED' | 'OPEN' | 'DECLINED' | 'SUPERSEDED' // New: PR states
         }>
         cached?: boolean
         cache_expires_at?: string
@@ -917,43 +925,24 @@ class BitbucketService {
         throw new Error('Failed to fetch data from Laravel backend')
       }
       
-      // Transform the new API response format to ProcessedCommit format
-      const allData: ProcessedCommit[] = response.data.map(item => {
-        if (item.type === 'commit') {
-          return {
-            repo: item.repository,
-            pr: null,
-            pr_id: null,
-            pr_author_display_name: null,
-            pr_created_on: null,
-            pr_updated_on: null,
-            pr_links_commits_href: null,
-            commit_hash: item.hash || '',
-            commit_date: item.date,
-            commit_author_raw: item.author_raw || '',
-            commit_message: item.message || '',
-            ticket: item.ticket,
-            ticket_source: item.ticket ? 'commit message' : null
-          }
-        } else {
-          // Handle pull_request type
-          return {
-            repo: item.repository,
-            pr: item.pr_title || '',
-            pr_id: item.pr_id || null,
-            pr_author_display_name: item.pr_author || null,
-            pr_created_on: item.pr_created_on || null,
-            pr_updated_on: item.pr_updated_on || null,
-            pr_links_commits_href: null,
-            commit_hash: item.hash || '',
-            commit_date: item.date,
-            commit_author_raw: item.author_raw || '',
-            commit_message: item.message || '',
-            ticket: item.ticket,
-            ticket_source: item.ticket ? 'PR title' : null
-          }
-        }
-      })
+      // Pass through the clean backend format with minimal transformation
+      const allData: any[] = response.data.map(item => ({
+        // Keep all backend fields as-is
+        ...item,
+        // Add compatibility fields for any components still expecting old format  
+        repo: item.repository,
+        pr: item.pr_title || null,
+        commit_hash: item.hash || null,
+        commit_date: item.date,
+        commit_message: item.message || null,
+        commit_author_raw: item.author_raw || null,
+        pr_id: item.pull_request_id || null,
+        pr_author_display_name: item.pr_author || null,
+        pr_created_on: item.pr_created_on || null,
+        pr_updated_on: item.pr_updated_on || null,
+        pr_links_commits_href: null,
+        ticket_source: item.ticket ? (item.type === 'commit' ? 'commit message' : 'PR title') : null
+      }))
       
       // Sort by date (newest first) 
       const sortedData = allData.sort((a, b) => {
@@ -962,7 +951,7 @@ class BitbucketService {
         return dateB - dateA
       })
       
-      console.log(`✅ Received ${sortedData.length} processed items from Laravel backend`)
+      console.log(`✅ Received ${sortedData.length} activity items from Laravel backend (commits + PRs)`)
       if (response.cached) {
         console.log('📊 Cache info:', { 
           cached: response.cached, 

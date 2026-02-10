@@ -19,9 +19,9 @@ const filteredAndSortedData = computed(() => {
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter(item => 
-      item.repo?.toLowerCase().includes(query) ||
-      item.pr?.toLowerCase().includes(query) ||
-      item.commit_message?.toLowerCase().includes(query)
+      item.repository?.toLowerCase().includes(query) ||
+      item.message?.toLowerCase().includes(query) ||
+      item.pr_title?.toLowerCase().includes(query)
     )
   }
   
@@ -31,16 +31,16 @@ const filteredAndSortedData = computed(() => {
     
     switch (sortField.value) {
       case 'date':
-        aValue = new Date(a.commit_date || a.pr_updated_on)
-        bValue = new Date(b.commit_date || b.pr_updated_on)
+        aValue = new Date(a.date)
+        bValue = new Date(b.date)
         break
       case 'repo':
-        aValue = a.repo || ''
-        bValue = b.repo || ''
+        aValue = a.repository || ''
+        bValue = b.repository || ''
         break
       case 'type':
-        aValue = a.commit_hash ? 'commit' : 'pr'
-        bValue = b.commit_hash ? 'commit' : 'pr'
+        aValue = a.type || ''
+        bValue = b.type || ''
         break
       default:
         return 0
@@ -75,23 +75,28 @@ function formatDate(dateString) {
 }
 
 function getItemType(item) {
-  return item.commit_hash ? 'commit' : 'pr'
+  return item.type === 'pull_request' ? 'pr' : item.type
 }
 
 function getDisplayTitle(item) {
-  if (item.commit_hash) {
-    return item.commit_message?.split('\n')[0] || 'Commit'
+  console.log('Getting display title for item:', item)
+  
+  if (item.type === 'commit') {
+    return item.message?.split('\n')[0] || 'Commit'
+  } else if (item.type === 'pull_request') {
+    return item.title || 'Pull Request'
   }
-  return item.pr || 'Pull Request'
+  
+  return 'Unknown'
 }
 
 function extractIssueId(item) {
-  // Use the ticket field from our service if available
+  // Use the ticket field from backend if available
   if (item.ticket) {
     return item.ticket
   }
   
-  // Fallback to old hardcoded extraction for backwards compatibility
+  // Extract from message or title
   const text = getDisplayTitle(item)
   const match = text?.match(/(ASUITE-\d+|ASM-\d+)/)
   return match ? match[1] : null
@@ -111,7 +116,7 @@ async function copyToClipboard(text) {
 }
 
 function getRepoDisplayName(repo) {
-  return repo?.replace('atabase-', '') || ''
+  return repo?.replace('atabix/', '').replace('atabase-', '') || ''
 }
 </script>
 
@@ -157,6 +162,7 @@ function getRepoDisplayName(repo) {
               }">↓</span>
             </th>
             <th>Title/Message</th>
+            <th>Branch</th>
             <th>Issue</th>
           </tr>
         </thead>
@@ -176,17 +182,24 @@ function getRepoDisplayName(repo) {
             </td>
             
             <td class="repo-cell">
-              {{ getRepoDisplayName(item.repo) }}
+              {{ getRepoDisplayName(item.repository) }}
             </td>
             
             <td class="date-cell">
-              {{ formatDate(item.commit_date || item.pr_updated_on) }}
+              {{ formatDate(item.date) }}
             </td>
             
             <td class="title-cell">
               <div class="title-content">
                 {{ getDisplayTitle(item) }}
               </div>
+            </td>
+            
+            <td class="branch-cell">
+              <span v-if="item.branch" class="branch-badge">
+                {{ item.branch }}
+              </span>
+              <span v-else class="no-branch">—</span>
             </td>
             
             <td class="issue-cell">
@@ -214,7 +227,7 @@ function getRepoDisplayName(repo) {
           </tr>
           
           <tr v-if="filteredAndSortedData.length === 0 && !isLoading">
-            <td colspan="5" class="no-data">
+            <td colspan="6" class="no-data">
               No data found{{ searchQuery ? ' matching your search' : '' }}
             </td>
           </tr>
@@ -417,6 +430,27 @@ function getRepoDisplayName(repo) {
   color: #6b7280;
   font-style: italic;
   margin-left: 4px;
+}
+
+/* Branch Column Styling */
+.branch-cell {
+  text-align: center;
+  width: 100px;
+}
+
+.branch-badge {
+  background: #fef3e2;
+  color: #f97316;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #fed7aa;
+}
+
+.no-branch {
+  color: #9ca3af;
+  font-style: italic;
 }
 
 .no-data {
