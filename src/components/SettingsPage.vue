@@ -3,13 +3,14 @@ import { ref, onMounted, computed } from 'vue'
 import { Save } from 'lucide-vue-next'
 import { bitbucketService } from '../services/bitbucketService'
 
-const emit = defineEmits(['repos-changed'])
+const emit = defineEmits(['repos-changed', 'repository-status-changed'])
 
 const loading = ref(false)
 const error = ref(null)
 const availableRepos = ref([])
 const selectedRepos = ref([])
 const searchQuery = ref('')
+const togglingRepos = ref(new Set())
 
 // Computed filtered repositories based on search
 const filteredRepos = computed(() => {
@@ -32,11 +33,14 @@ async function loadRepositories() {
   error.value = null
   
   try {
-    availableRepos.value = await bitbucketService.getAvailableRepositories()
+    // Load user repositories with enable/disable status
+    availableRepos.value = await bitbucketService.fetchAllRepositories()
+    const userRepos = await bitbucketService.fetchUserRepositories()
     
-    // Get currently selected repos from the service
-    const currentRepos = bitbucketService.config.repos || []
-    selectedRepos.value = currentRepos.length > 0 ? currentRepos : availableRepos.value.map(repo => repo.name)
+    // Select only enabled repositories by default (store in workspace/repo format)
+    selectedRepos.value = userRepos
+      .filter(repo => repo.is_enabled !== false)
+      .map(repo => `${repo.workspace}/${repo.name}`)
     
   } catch (err) {
     error.value = err.message
@@ -46,17 +50,80 @@ async function loadRepositories() {
   }
 }
 
+async function toggleRepositoryStatus(repo) {
+  if (!repo.name || togglingRepos.value.has(repo.name)) {
+    return
+  }
+  
+  togglingRepos.value.add(repo.name)
+  
+  try {
+    const response = await bitbucketService.toggleRepositoryStatus(repo.name)
+    
+    if (response.success) {
+      // Update the repo in our local data
+      const repoIndex = availableRepos.value.findIndex(r => r.name === repo.name)
+      if (repoIndex !== -1) {
+        availableRepos.value[repoIndex].is_enabled = response.is_enabled
+        
+        // Update selected repos based on new status
+        const repoName = repo.name
+        const workspace = repo.workspace || availableRepos.value.find(r => r.name === repoName)?.workspace || 'unknown'
+        const fullRepoName = `${workspace}/${repoName}`
+        const isSelected = selectedRepos.value.includes(fullRepoName)
+        
+        if (response.is_enabled && !isSelected) {
+          // Enable and select the repo
+          selectedRepos.value.push(fullRepoName)
+          emit('repos-changed', selectedRepos.value)
+        } else if (!response.is_enabled && isSelected) {
+          // Disable and deselect the repo
+          selectedRepos.value = selectedRepos.value.filter(name => name !== fullRepoName)
+          emit('repos-changed', selectedRepos.value)
+        }
+        
+        // Emit status change event
+        emit('repository-status-changed', {
+          repository: availableRepos.value[repoIndex],
+          enabled: response.is_enabled
+        })
+        
+        console.log(`Repository ${repo.name} ${response.is_enabled ? 'enabled' : 'disabled'}`)
+      }
+    } else {
+      console.error('Failed to toggle repository status:', response.message)
+    }
+  } catch (err) {
+    console.error('Error toggling repository status:', err)
+  } finally {
+    togglingRepos.value.delete(repo.name)
+  }
+}
+
 function toggleRepo(repoName) {
-  const index = selectedRepos.value.indexOf(repoName)
+  // Check if repo is disabled
+  const repo = availableRepos.value.find(r => r.name === repoName)
+  if (repo && repo.is_enabled === false) {
+    return // Don't allow toggling disabled repositories
+  }
+  
+  // Find the workspace for this repo (fallback to availableRepos if needed)
+  const workspace = repo?.workspace || 'unknown'
+  const fullRepoName = `${workspace}/${repoName}`
+  
+  const index = selectedRepos.value.indexOf(fullRepoName)
   if (index > -1) {
     selectedRepos.value.splice(index, 1)
   } else {
-    selectedRepos.value.push(repoName)
+    selectedRepos.value.push(fullRepoName)
   }
 }
 
 function selectAll() {
-  selectedRepos.value = filteredRepos.value.map(repo => repo.name)
+  // Only select enabled repositories (store in workspace/repo format)
+  selectedRepos.value = filteredRepos.value
+    .filter(repo => repo.is_enabled !== false)
+    .map(repo => `${repo.workspace || 'unknown'}/${repo.name}`)
 }
 
 function selectNone() {
@@ -65,26 +132,46 @@ function selectNone() {
 
 function selectByLanguage(language) {
   const reposWithLanguage = filteredRepos.value
-    .filter(repo => repo.language === language)
-    .map(repo => repo.name)
+    .filter(repo => repo.language === language && repo.is_enabled !== false)
+    .map(repo => `${repo.workspace || 'unknown'}/${repo.name}`)
   
   // Add to selected if not already selected
-  reposWithLanguage.forEach(repoName => {
-    if (!selectedRepos.value.includes(repoName)) {
-      selectedRepos.value.push(repoName)
+  reposWithLanguage.forEach(fullRepoName => {
+    if (!selectedRepos.value.includes(fullRepoName)) {
+      selectedRepos.value.push(fullRepoName)
     }
   })
 }
 
-function saveSettings() {
-  emit('repos-changed', selectedRepos.value)
-  // Show success message briefly
-  const successMessage = document.querySelector('.success-message')
-  if (successMessage) {
-    successMessage.style.display = 'block'
-    setTimeout(() => {
-      successMessage.style.display = 'none'
-    }, 3000)
+async function saveSettings() {
+  loading.value = true
+  error.value = null
+  
+  try {
+    // selectedRepos already contains workspace/repo format
+    const response = await bitbucketService.saveUserRepositorySelections(selectedRepos.value)
+    
+    if (response.success) {
+      // Emit the full workspace/repo format for API calls
+      emit('repos-changed', selectedRepos.value)
+      
+      // Show success message briefly
+      const successMessage = document.querySelector('.success-message')
+      if (successMessage) {
+        successMessage.style.display = 'block'
+        setTimeout(() => {
+          successMessage.style.display = 'none'
+        }, 3000)
+      }
+    } else {
+      error.value = response.message || 'Failed to save repository selections'
+      console.error('Failed to save repository selections:', response.message)
+    }
+  } catch (err) {
+    error.value = err.message || 'An error occurred while saving settings'
+    console.error('Error saving repository selections:', err)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -134,6 +221,11 @@ function formatDate(dateString) {
           ✅ Settings saved successfully!
         </div>
 
+        <!-- Error Message -->
+        <div v-if="error" class="error-message">
+          ❌ {{ error }}
+        </div>
+
         <!-- Repository Controls -->
         <div class="repo-controls">
           <div class="control-row">
@@ -175,7 +267,14 @@ function formatDate(dateString) {
             </span>
             
             <button @click="saveSettings" class="save-btn" :disabled="loading">
-              <Save :size="16" /> Save Settings
+              <div v-if="loading" class="save-btn-content">
+                <div class="spinner small"></div>
+                <span>Saving...</span>
+              </div>
+              <div v-else class="save-btn-content">
+                <Save :size="16" />
+                <span>Save Settings</span>
+              </div>
             </button>
           </div>
         </div>
@@ -197,26 +296,46 @@ function formatDate(dateString) {
               v-for="repo in filteredRepos" 
               :key="repo.name"
               class="repo-card"
-              :class="{ selected: selectedRepos.includes(repo.name) }"
+              :class="{ 
+                selected: selectedRepos.some(fullName => fullName.endsWith('/' + repo.name)),
+                disabled: repo.is_enabled === false
+              }"
             >
               <label class="repo-label">
                 <input 
                   type="checkbox" 
                   :value="repo.name"
-                  :checked="selectedRepos.includes(repo.name)"
+                  :checked="selectedRepos.some(fullName => fullName.endsWith('/' + repo.name))"
+                  :disabled="repo.is_enabled === false"
                   @change="toggleRepo(repo.name)"
                   class="repo-checkbox"
                 />
                 <div class="repo-info">
                   <div class="repo-header">
                     <span class="repo-name">{{ repo.name }}</span>
-                    <span v-if="repo.language" class="repo-language">{{ repo.language }}</span>
+                    <div class="repo-badges">
+                      <span v-if="repo.is_primary" class="badge primary">Primary</span>
+                      <span v-if="repo.language" class="repo-language">{{ repo.language }}</span>
+                      <span v-if="repo.is_enabled === false" class="badge disabled">Disabled</span>
+                      <span v-else-if="repo.is_enabled === true" class="badge enabled">Enabled</span>
+                    </div>
                   </div>
                   <div class="repo-meta">
                     <span v-if="repo.updated_on" class="updated-date">
                       Updated {{ formatDate(repo.updated_on) }}
                     </span>
                   </div>
+                </div>
+                <div v-if="repo.name" class="repo-actions" @click.prevent>
+                  <button 
+                    @click="toggleRepositoryStatus(repo)"
+                    :class="['toggle-btn', repo.is_enabled ? 'enabled' : 'disabled']"
+                    :disabled="togglingRepos.has(repo.name)"
+                    :title="repo.is_enabled ? 'Disable repository' : 'Enable repository'"
+                  >
+                    <span v-if="togglingRepos.has(repo.name)" class="toggle-spinner"></span>
+                    <span v-else class="toggle-icon">{{ repo.is_enabled ? '●' : '○' }}</span>
+                  </button>
                 </div>
               </label>
             </div>
@@ -305,6 +424,14 @@ function formatDate(dateString) {
   color: #155724;
   padding: 12px 24px;
   border-bottom: 1px solid #c3e6cb;
+  font-weight: 500;
+}
+
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 12px 24px;
+  border-bottom: 1px solid #f5c6cb;
   font-weight: 500;
 }
 
@@ -417,6 +544,7 @@ function formatDate(dateString) {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 140px;
 }
 
 .save-btn:hover:not(:disabled) {
@@ -427,6 +555,23 @@ function formatDate(dateString) {
 .save-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+  transform: none;
+}
+
+.save-btn-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.spinner.small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 .repo-grid {
@@ -479,6 +624,7 @@ function formatDate(dateString) {
   border-radius: 8px;
   transition: all 0.2s;
   background: white;
+  position: relative;
 }
 
 .repo-card:hover {
@@ -492,11 +638,22 @@ function formatDate(dateString) {
   box-shadow: 0 2px 8px rgba(249, 115, 22, 0.15);
 }
 
+.repo-card.disabled {
+  opacity: 0.7;
+  background: #f8f9fa;
+}
+
+.repo-card.disabled.selected {
+  background: #fff3cd;
+  border-color: #ffc107;
+}
+
 .repo-label {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 16px;
+  padding-right: 60px;
   cursor: pointer;
   width: 100%;
 }
@@ -504,6 +661,10 @@ function formatDate(dateString) {
 .repo-checkbox {
   margin-top: 2px;
   transform: scale(1.2);
+}
+
+.repo-checkbox:disabled {
+  opacity: 0.5;
 }
 
 .repo-info {
@@ -515,12 +676,46 @@ function formatDate(dateString) {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
+  gap: 8px;
 }
 
 .repo-name {
   font-weight: 600;
   color: #2c3e50;
   font-size: 15px;
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-badges {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge.primary {
+  background: #007bff;
+  color: white;
+}
+
+.badge.enabled {
+  background: #28a745;
+  color: white;
+}
+
+.badge.disabled {
+  background: #6c757d;
+  color: white;
 }
 
 .repo-language {
@@ -546,6 +741,74 @@ function formatDate(dateString) {
 .updated-date {
   display: flex;
   align-items: center;
+}
+
+.repo-actions {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+
+.toggle-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: #f8f9fa;
+  border: 2px solid #dee2e6;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+  border-color: #adb5bd;
+}
+
+.toggle-btn.enabled {
+  background: #28a745;
+  border-color: #28a745;
+  color: white;
+}
+
+.toggle-btn.enabled:hover {
+  background: #218838;
+  border-color: #218838;
+}
+
+.toggle-btn.disabled {
+  background: #6c757d;
+  border-color: #6c757d;
+  color: white;
+}
+
+.toggle-btn.disabled:hover {
+  background: #5a6268;
+  border-color: #5a6268;
+}
+
+.toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toggle-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.toggle-icon {
+  line-height: 1;
 }
 
 /* Mobile responsiveness */

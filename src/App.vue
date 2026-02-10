@@ -39,6 +39,9 @@ onMounted(async () => {
     console.log("🚀 ~ testResult:", testResult.success)
     if (testResult.success) {
       console.log('✅ Authentication successful')
+      // Load user's saved repository selections first
+      await loadUserRepositories()
+      // Then fetch hours data with those repositories
       await fetchHoursData()
     } else {
       console.error('❌ Authentication failed:', testResult.message)
@@ -46,6 +49,21 @@ onMounted(async () => {
     }
   }
 })
+
+async function loadUserRepositories() {
+  try {
+    const userRepos = await bitbucketService.fetchUserRepositories()
+    // Get enabled repositories in workspace/repo format
+    selectedRepos.value = userRepos
+      .filter(repo => repo.is_enabled !== false)  
+      .map(repo => `${repo.workspace}/${repo.name}`)
+    
+    console.log(`✅ Loaded ${selectedRepos.value.length} enabled repositories:`, selectedRepos.value)
+  } catch (err) {
+    console.error('Failed to load user repositories:', err)
+    selectedRepos.value = [] // Fallback to empty array
+  }
+}
 
 async function fetchHoursData(forceRefresh = false) {
   if (!isAuthenticated.value) {

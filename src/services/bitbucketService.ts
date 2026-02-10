@@ -18,7 +18,10 @@ import type {
   BitbucketServiceConfig,
   ServiceCache,
   FetchPullRequestsParams,
-  FetchCommitsParams
+  FetchCommitsParams,
+  UserRepository,
+  RepositoryStatusResponse,
+  RepositoryToggleResponse
 } from '../types/bitbucket'
 
 class BitbucketService {
@@ -302,6 +305,183 @@ class BitbucketService {
     } catch (error) {
       console.error('Error fetching repositories from Laravel backend:', error)
       return []
+    }
+  }
+
+  // Fetch user repositories with enable/disable status
+  async fetchUserRepositories(): Promise<UserRepository[]> {
+    console.log('🔍 Fetching user repositories via Laravel backend...')
+    
+    try {
+      const url = `${this.apiBase}/repositories/user`
+      
+      const response = await this.getFetch<{ data: UserRepository[] }>(url)
+      
+      if (!response || !response.data) {
+        console.warn('No user repositories returned from Laravel backend')
+        return []
+      }
+      
+      const userRepositories = response.data
+      
+      // Sort repositories by name
+      const result = userRepositories.sort((a, b) => a.name.localeCompare(b.name))
+      
+      console.log(`✅ Fetched ${result.length} user repositories from Laravel backend`)
+      
+      return result
+      
+    } catch (error) {
+      console.error('Error fetching user repositories from Laravel backend:', error)
+      return []
+    }
+  }
+
+  // Enable a repository for the user
+  async enableRepository(repositoryId: number): Promise<RepositoryStatusResponse> {
+    console.log('✅ Enabling repository via Laravel backend...', repositoryId)
+    
+    try {
+      const url = `${this.apiBase}/repositories/user/${repositoryId}/enable`
+      
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('✅ Repository enabled successfully:', result)
+        // Clear cache to force refresh
+        this.cache.repositories = null
+        this.cache.repositoriesTimestamp = null
+        return result
+      } else {
+        throw new Error(`Failed to enable repository: ${response.statusText}`)
+      }
+      
+    } catch (error) {
+      console.error('Error enabling repository:', error)
+      return {
+        success: false,
+        message: error.message || 'Failed to enable repository'
+      }
+    }
+  }
+
+  // Disable a repository for the user
+  async disableRepository(repositoryId: number): Promise<RepositoryStatusResponse> {
+    console.log('❌ Disabling repository via Laravel backend...', repositoryId)
+    
+    try {
+      const url = `${this.apiBase}/repositories/user/${repositoryId}/disable`
+      
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('❌ Repository disabled successfully:', result)
+        // Clear cache to force refresh
+        this.cache.repositories = null
+        this.cache.repositoriesTimestamp = null
+        return result
+      } else {
+        throw new Error(`Failed to disable repository: ${response.statusText}`)
+      }
+      
+    } catch (error) {
+      console.error('Error disabling repository:', error)
+      return {
+        success: false,
+        message: error.message || 'Failed to disable repository'
+      }
+    }
+  }
+
+  // Toggle repository enable/disable status using repository name
+  async toggleRepositoryStatus(repositoryName: string): Promise<RepositoryToggleResponse> {
+    console.log('🔄 Toggling repository status via Laravel backend...', repositoryName)
+    
+    try {
+      const url = `${this.apiBase}/repositories/user/${encodeURIComponent(repositoryName)}/toggle`
+      
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('🔄 Repository status toggled successfully:', result)
+        // Clear cache to force refresh
+        this.cache.repositories = null
+        this.cache.repositoriesTimestamp = null
+        return result
+      } else {
+        throw new Error(`Failed to toggle repository status: ${response.statusText}`)
+      }
+      
+    } catch (error) {
+      console.error('Error toggling repository status:', error)
+      return {
+        success: false,
+        message: error.message || 'Failed to toggle repository status',
+        is_enabled: false
+      }
+    }
+  }
+
+  // Save user repository selections (bulk update)
+  async saveUserRepositorySelections(repositoryNames: string[]): Promise<RepositoryStatusResponse> {
+    console.log('💾 Saving user repository selections via Laravel backend...', repositoryNames)
+    
+    try {
+      const url = `${this.apiBase}/repositories/user`
+      
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          enabled_repositories: repositoryNames
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('💾 Repository selections saved successfully:', result)
+        // Clear cache to force refresh
+        this.cache.repositories = null
+        this.cache.repositoriesTimestamp = null
+        return {
+          success: true,
+          message: 'Repository selections saved successfully'
+        }
+      } else {
+        const errorText = await response.text()
+        throw new Error(`Failed to save repository selections: ${response.statusText} - ${errorText}`)
+      }
+      
+    } catch (error) {
+      console.error('Error saving repository selections:', error)
+      return {
+        success: false,
+        message: error.message || 'Failed to save repository selections'
+      }
     }
   }
 
@@ -706,12 +886,14 @@ class BitbucketService {
         author: this.config.apiUsername // Use username/email instead of display name
       })
       
-      // Add repository filtering if specified
-      if (selectedRepos && selectedRepos.length > 0) {
-        params.append('repositories', selectedRepos.join(','))
-      }
+      // Build URL with repositories parameter manually to avoid double encoding
+      let url = `${this.apiBase}/bitbucket/commits?${params.toString()}`
       
-      const url = `${this.apiBase}/bitbucket/commits?${params.toString()}`
+      // // Add repository filtering if specified (avoid URLSearchParams encoding)
+      // if (selectedRepos && selectedRepos.length > 0) {
+      //   const reposParam = selectedRepos.join(',')
+      //   url += `&repositories=${reposParam}`
+      // }
       
       const response = await this.getFetch<{
         commits: ProcessedCommit[]
@@ -789,6 +971,11 @@ export const bitbucketService = new BitbucketService()
 // Extend the service instance with additional convenience methods
 interface ExtendedBitbucketService extends BitbucketService {
   getAvailableRepositories(): Promise<BitbucketRepository[]>
+  getUserRepositories(): Promise<UserRepository[]>
+  enableRepository(repositoryId: number): Promise<RepositoryStatusResponse>
+  disableRepository(repositoryId: number): Promise<RepositoryStatusResponse>
+  toggleRepositoryStatus(repositoryName: string): Promise<RepositoryToggleResponse>
+  saveUserRepositorySelections(repositoryNames: string[]): Promise<RepositoryStatusResponse>
   clearCache(pattern?: string | null): void
   fetchAllDataFresh(maxDays?: number, selectedRepos?: string[] | null): Promise<ProcessedCommit[]>
   testAuthentication(): Promise<{ success: boolean; message: string; userInfo?: any }>
@@ -799,6 +986,26 @@ const extendedService = bitbucketService as ExtendedBitbucketService
 
 extendedService.getAvailableRepositories = async function(): Promise<BitbucketRepository[]> {
   return await this.fetchAllRepositories()
+}
+
+extendedService.getUserRepositories = async function(): Promise<UserRepository[]> {
+  return await this.fetchUserRepositories()
+}
+
+extendedService.enableRepository = async function(repositoryId: number): Promise<RepositoryStatusResponse> {
+  return await this.enableRepository(repositoryId)
+}
+
+extendedService.disableRepository = async function(repositoryId: number): Promise<RepositoryStatusResponse> {
+  return await this.disableRepository(repositoryId)
+}
+
+extendedService.toggleRepositoryStatus = async function(repositoryName: string): Promise<RepositoryToggleResponse> {
+  return await BitbucketService.prototype.toggleRepositoryStatus.call(this, repositoryName)
+}
+
+extendedService.saveUserRepositorySelections = async function(repositoryNames: string[]): Promise<RepositoryStatusResponse> {
+  return await BitbucketService.prototype.saveUserRepositorySelections.call(this, repositoryNames)
 }
 
 extendedService.clearCache = function(pattern: string | null = null): void {

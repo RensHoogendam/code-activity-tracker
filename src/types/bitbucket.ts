@@ -4,6 +4,19 @@ export interface BitbucketRepository {
   name: string;
   updated_on: string | null;
   language: string | null;
+  workspace?: string;
+  is_enabled?: boolean;
+  is_primary?: boolean;
+}
+
+export interface UserRepository {
+  id: number;
+  name: string;
+  updated_on: string | null;
+  language: string | null;
+  workspace: string;
+  is_enabled: boolean;
+  is_primary: boolean;
 }
 
 export interface BitbucketPullRequest {
@@ -105,3 +118,17 @@ export interface FetchCommitsParams {
 }
 
 export type ProcessedActivity = ProcessedCommit;
+
+// Repository management API responses
+export interface RepositoryStatusResponse {
+  success: boolean;
+  message: string;
+  repository?: UserRepository;
+}
+
+export interface RepositoryToggleResponse {
+  success: boolean;
+  message: string;
+  is_enabled: boolean;
+  repository?: UserRepository;
+}
