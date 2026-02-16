@@ -202,6 +202,42 @@ export interface RepoActivity {
   lastActivity: string;
 }
 
+// Background Job System Types
+export interface RefreshJobStatus {
+  job_id: string;
+  status: 'started' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  message: string;
+  updated_at: string;
+  elapsed_time: number; // in seconds
+  elapsed_time_human: string;
+  parameters: {
+    max_days: number;
+    selected_repos_count: number;
+    author_filter: string;
+  };
+  time_since_update: {
+    human_readable: string;
+    seconds: number;
+  };
+  is_running: boolean;
+  is_completed: boolean;
+  is_failed: boolean;
+  is_cancelled?: boolean;
+  started_at?: string;
+  completed_at?: string;
+  cancelled_at?: string;
+  error?: string;
+  progress?: number; // Optional - for future progress tracking
+}
+
+export interface ResponseWithRefreshStatus<T> {
+  data: T;
+  refresh_status?: RefreshJobStatus;
+  cached?: boolean;
+  cache_expires_at?: string;
+  repositories_used?: string[];
+}
+
 // Authentication and Service Status
 export interface AuthenticationState {
   isAuthenticated: boolean;
@@ -213,6 +249,7 @@ export interface ServiceStatus {
   isLoading: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  refreshJob?: RefreshJobStatus;
 }
 
 export interface TestResult {

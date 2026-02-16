@@ -21,8 +21,12 @@ import type {
   FetchCommitsParams,
   UserRepository,
   RepositoryStatusResponse,
-  RepositoryToggleResponse
+  RepositoryToggleResponse,
+  RefreshJobStatus,
+  ResponseWithRefreshStatus
 } from '../types/bitbucket'
+
+import { refreshStatusStore } from '../stores/refreshStore'
 
 class BitbucketService {
   private config: BitbucketServiceConfig
@@ -53,6 +57,76 @@ class BitbucketService {
       repositoriesTimestamp: null
     }
   }
+
+  private async deleteCall<T = any>(url: string): Promise<T | undefined> {
+    console.log('🗑️ Laravel API deleteCall():', url)
+    
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      })
+      
+      if (response.ok) {
+        try {
+          return await response.json()
+        } catch (error) {
+          console.error('JSON parsing error:', { error, url })
+          return undefined
+        }
+      }
+      
+      // Enhanced error handling for Laravel backend responses
+      if (response.status === 401) {
+        console.error('🔐 Laravel backend authentication failed (401):', {
+          message: 'Backend authentication issue with Bitbucket API',
+          suggestion: 'Check Laravel backend configuration and Bitbucket token setup',
+          url: url
+        })
+      } else if (response.status === 403) {
+        console.error('🚫 Access forbidden (403):', {
+          message: 'Backend reports insufficient permissions',
+          suggestion: 'Verify Bitbucket token permissions in Laravel backend',
+          url: url
+        })
+      } else if (response.status === 404) {
+        console.error('❓ Resource not found (404):', {
+          message: 'Laravel backend endpoint not found or resource does not exist',
+          suggestion: 'Ensure Laravel backend is running and the resource exists',
+          url: url
+        })
+      } else if (response.status === 500) {
+        console.error('🔥 Laravel backend error (500):', {
+          message: 'Internal server error in Laravel backend',
+          suggestion: 'Check Laravel logs for detailed error information',
+          url: url
+        })
+      } else {
+        console.error('HTTP error:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: url
+        })
+      }
+    } catch (error) {
+      // Check if Laravel backend is accessible
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.error('🔌 Laravel backend connection failed:', {
+          message: 'Cannot connect to Laravel backend',
+          suggestion: 'Ensure Laravel backend is running on localhost:8000',
+          apiBase: this.apiBase
+        })
+      } else {
+        console.error('Delete request error:', { error, url })
+      }
+    }
+    
+    return undefined
+  }
+
 
   // Laravel Backend API fetch wrapper
   private async getFetch<T = any>(url: string): Promise<T | undefined> {
@@ -839,7 +913,8 @@ class BitbucketService {
       // Use new Laravel backend endpoint for unified activity (commits + pull requests)
       const params = new URLSearchParams({
         days: maxDays.toString(),
-        author: this.config.authorEmail || this.config.apiUsername // Use username/email instead of display name
+        author: this.config.authorEmail || this.config.apiUsername, // Use username/email instead of display name
+        force_refresh: forceRefresh.toString()
       })
       
       // Build URL with repositories parameter manually to avoid double encoding
@@ -852,34 +927,39 @@ class BitbucketService {
       // }
       
       
-      const response = await this.getFetch<{
-        data: Array<{
-          type: 'commit' | 'pull_request'
-          repository: string
-          hash?: string
-          date: string
-          message?: string
-          author_raw?: string
-          author_username?: string | null
-          ticket?: string | null
-          branch?: string // New: branch information for commits
-          // PR-specific fields
-          pr_id?: number
-          pr_title?: string
-          pr_author?: string
-          pr_created_on?: string
-          pr_updated_on?: string
-          pr_state?: 'MERGED' | 'OPEN' | 'DECLINED' | 'SUPERSEDED' // New: PR states
-        }>
-        cached?: boolean
-        cache_expires_at?: string
-        repositories_used?: string[]
-      }>(url)
+      const response = await this.getFetch<ResponseWithRefreshStatus<Array<{
+        type: 'commit' | 'pull_request'
+        repository: string
+        hash?: string
+        date: string
+        message?: string
+        author_raw?: string
+        author_username?: string | null
+        ticket?: string | null
+        branch?: string // New: branch information for commits
+        // PR-specific fields
+        pr_id?: number
+        pr_title?: string
+        pr_author?: string
+        pr_created_on?: string
+        pr_updated_on?: string
+        pr_state?: 'MERGED' | 'OPEN' | 'DECLINED' | 'SUPERSEDED' // New: PR states
+      }>>>(url)
       
       if (!response || !response.data) {
         throw new Error('Failed to fetch data from Laravel backend')
       }
-      
+
+      // Handle background refresh job status
+      if (response.refresh_status) {
+        refreshStatusStore.setRefreshJob(response.refresh_status)
+        console.log('🔄 Refresh job status:', response.refresh_status)
+        
+        if (forceRefresh && (response.refresh_status.status === 'started' || response.refresh_status.is_running)) {
+          console.log('✨ Background refresh started! Job ID:', response.refresh_status.job_id)
+        }
+      }
+
       // Pass through the clean backend format with minimal transformation
       const allData: any[] = response.data.map(item => ({
         // Keep all backend fields as-is
@@ -954,14 +1034,159 @@ class BitbucketService {
     // With Laravel backend, credentials are managed server-side
     return !!this.apiBase
   }
+
+  // Background Job System Methods
+
+  /**
+   * Check the status of a background refresh job
+   * @param jobId The job ID to check
+   * @returns Job status information
+   */
+  async checkRefreshJobStatus(jobId: string): Promise<RefreshJobStatus | null> {
+    try {
+      const url = `${this.apiBase}/bitbucket/refresh-status/${jobId}`
+      const response = await this.getFetch<RefreshJobStatus>(url)
+      
+      if (response) {
+        // Update the store with latest status
+        refreshStatusStore.setRefreshJob(response)
+        console.log(`🔍 Job ${jobId} status:`, response.status, response.message)
+        return response
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Failed to check refresh job status:', error)
+      return null
+    }
+  }
+
+  /**
+   * Cancel a background refresh job
+   * @param jobId The job ID to cancel
+   * @returns Success status
+   */
+  async cancelRefreshJob(jobId: string): Promise<boolean> {
+    try {
+      const url = `${this.apiBase}/bitbucket/refresh-cancel/${jobId}`
+      const response = await this.deleteCall<{ success: boolean; message: string; job?: RefreshJobStatus }>(url)
+      
+      if (response?.success) {
+        console.log(`✋ Successfully cancelled job ${jobId}:`, response.message)
+        
+        // Update the store with cancelled status if provided
+        if (response.job) {
+          refreshStatusStore.setRefreshJob(response.job)
+        }
+        
+        return true
+      } else {
+        console.warn(`⚠️ Failed to cancel job ${jobId}:`, response?.message)
+        return false
+      }
+    } catch (error) {
+      console.error('Failed to cancel refresh job:', error)
+      return false
+    }
+  }
+
+  /**
+   * Get the current refresh job status (if any)
+   */
+  getCurrentRefreshJob(): RefreshJobStatus | null {
+    return refreshStatusStore.currentJob
+  }
+
+  /**
+   * Poll a refresh job until completion
+   * @param jobId The job ID to poll
+   * @param maxWaitTime Maximum time to wait in milliseconds (default: 5 minutes)
+   * @param pollInterval Polling interval in milliseconds (default: 5 seconds)
+   * @returns Final job status
+   */
+  async pollRefreshJob(
+    jobId: string, 
+    maxWaitTime: number = 5 * 60 * 1000, // 5 minutes
+    pollInterval: number = 5000 // 5 seconds
+  ): Promise<RefreshJobStatus | null> {
+    const startTime = Date.now()
+    
+    console.log(`⏱️ Polling job ${jobId} for completion...`)
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      const status = await this.checkRefreshJobStatus(jobId)
+      
+      if (!status) {
+        console.error('❌ Lost track of refresh job')
+        return null
+      }
+      
+      if (status.status === 'completed') {
+        console.log('✅ Refresh job completed successfully!')
+        return status
+      }
+      
+      if (status.status === 'failed') {
+        console.error('❌ Refresh job failed:', status.error)
+        return status
+      }
+      
+      // Still in progress, wait and try again
+      console.log(`⏳ Job ${status.status}${status.progress ? ` (${status.progress}%)` : ''}...`)
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+    }
+    
+    console.warn('⚠️ Polling timeout reached')
+    return await this.checkRefreshJobStatus(jobId)
+  }
+
+  /**
+   * Start a background refresh and optionally wait for completion
+   * @param maxDays Number of days to fetch
+   * @param selectedRepos Selected repositories
+   * @param waitForCompletion Whether to wait for job completion
+   * @returns Object with immediate data and job status
+   */
+  async startBackgroundRefresh(
+    maxDays: number = 12, 
+    selectedRepos: string[] | null = null,
+    waitForCompletion: boolean = false
+  ): Promise<{
+    data: ProcessedCommit[],
+    refreshJob: RefreshJobStatus | null,
+    finalJobStatus?: RefreshJobStatus | null
+  }> {
+    // Get immediate data with background refresh started
+    const data = await this.fetchAllData(maxDays, selectedRepos, true)
+    const refreshJob = refreshStatusStore.currentJob
+    
+    let finalJobStatus: RefreshJobStatus | null = null
+    
+    // Optionally wait for completion (not recommended for UI responsiveness)
+    if (waitForCompletion && refreshJob?.job_id) {
+      console.log('🔄 Waiting for background refresh to complete...')
+      finalJobStatus = await this.pollRefreshJob(refreshJob.job_id)
+      
+      if (finalJobStatus?.is_completed) {
+        // Fetch fresh data after job completion
+        console.log('📊 Fetching fresh data after job completion...')
+        const freshData = await this.fetchAllData(maxDays, selectedRepos, false) // Don't force another refresh
+        return { data: freshData, refreshJob, finalJobStatus }
+      }
+    }
+    
+    return { data, refreshJob, finalJobStatus }
+  }
+
+  /**
+   * Check if there's currently an active refresh job
+   */
+  hasActiveRefreshJob(): boolean {
+    return refreshStatusStore.isJobActive
+  }
 }
 
 // Export singleton instance with proper typing
 export const bitbucketService = new BitbucketService()
-
-// Additional convenience methods for the service
-bitbucketService.fetchAllData = function(maxDays: number = 12, selectedRepos: string[] | null = null): Promise<ProcessedCommit[]> {
-  return this.fetchAllData(maxDays, selectedRepos, true) // Force refresh
-}
 
 export default bitbucketService

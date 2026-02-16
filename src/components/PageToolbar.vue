@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { RotateCw, Settings, Trash2 } from 'lucide-vue-next'
+import RefreshStatus from './RefreshStatus.vue'
 
-import type { AppFilters } from '../types/bitbucket'
+import type { AppFilters, RefreshJobStatus } from '../types/bitbucket'
 
 function handleSelectChange(event: Event): void {
   const target = event.target as HTMLSelectElement
@@ -10,12 +11,18 @@ function handleSelectChange(event: Event): void {
 
 // Props with proper typing
 interface Props {
+  title?: string
+  subtitle?: string
   lastUpdated: Date | null
   isLoading: boolean
   filters: AppFilters
+  refreshJob?: RefreshJobStatus | null
+  showRefreshStatus?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  title: 'Dashboard',
+  subtitle: 'Activity overview and analytics',
   lastUpdated: null,
   isLoading: false,
   filters: () => ({
@@ -23,7 +30,9 @@ const props = withDefaults(defineProps<Props>(), {
     dateRange: 12,
     author: 'Rens Hoogendam',
     type: 'all'
-  })
+  }),
+  refreshJob: null,
+  showRefreshStatus: false
 })
 
 // Emits with proper typing
@@ -32,6 +41,10 @@ const emit = defineEmits<{
   'force-refresh': []
   'clear-cache': []
   'filter-change': [filters: Partial<AppFilters>]
+  'hide-refresh-status': []
+  'retry-refresh': []
+  'cancel-refresh': [jobId: string]
+  'check-refresh-status': [jobId: string]
 }>()
 
 // Methods with proper typing
@@ -51,8 +64,8 @@ function formatLastUpdated(date: Date | null): string {
     <div class="toolbar-container">
       <!-- Left: Page title and description -->
       <div class="toolbar-left">
-        <h1 class="page-title">Dashboard</h1>
-        <p class="page-description">Activity overview and analytics</p>
+        <h1 class="page-title">{{ props.title }}</h1>
+        <p class="page-description">{{ props.subtitle }}</p>
       </div>
 
       <!-- Center: Controls -->
@@ -107,6 +120,18 @@ function formatLastUpdated(date: Date | null): string {
           </div>
         </div>
       </div>
+    </div>
+    
+    <!-- Refresh Status Display -->
+    <div v-if="showRefreshStatus" class="refresh-status-container">
+      <RefreshStatus
+        :refresh-job="refreshJob"
+        :is-visible="showRefreshStatus"
+        @hide="$emit('hide-refresh-status')"
+        @retry="$emit('retry-refresh')"
+        @cancel="$emit('cancel-refresh', $event)"
+        @check-status="$emit('check-refresh-status', $event)"
+      />
     </div>
   </div>
 </template>
@@ -303,6 +328,19 @@ function formatLastUpdated(date: Date | null): string {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+.refresh-status-container {
+  background: #f8f9fa;
+  border-top: 1px solid #e1e5e9;
+  padding: 8px 0;
+}
+
+.refresh-status-container :deep(.refresh-status) {
+  max-width: 1400px;
+  margin: 0 auto;
+  margin-left: 24px;
+  margin-right: 24px;
 }
 
 /* Mobile responsiveness */

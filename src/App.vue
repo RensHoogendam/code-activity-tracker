@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, provide, type Ref } from 'vue'
+import { ref, onMounted, provide, onBeforeUnmount, type Ref } from 'vue'
 import AppNavigation from './components/AppNavigation.vue'
 import bitbucketService from './services/bitbucketService'
+import { useRefreshStatus } from './stores/refreshStore'
 
 import type { 
   AppFilters, 
@@ -18,6 +19,17 @@ import {
   IS_AUTHENTICATED_KEY
 } from './types/vue'
 
+// Initialize refresh status store
+const {
+  refreshJob,
+  isVisible: showRefreshStatus,
+  setRefreshJob,
+  clearRefreshJob,
+  hideStatus,
+  shouldPoll,
+  cancelJob
+} = useRefreshStatus()
+
 // Reactive state with proper typing
 const isAuthenticated: Ref<boolean> = ref(false)
 const isLoading: Ref<boolean> = ref(false)
@@ -26,6 +38,9 @@ const filteredData: Ref<ProcessedCommit[]> = ref([])
 const error: Ref<string | null> = ref(null)
 const lastUpdated: Ref<Date | null> = ref(null)
 const selectedRepos: Ref<string[]> = ref([])
+
+// Polling management
+let pollInterval: NodeJS.Timeout | null = null
 
 const filters: Ref<AppFilters> = ref({
   repo: '',
@@ -45,6 +60,12 @@ onMounted(async (): Promise<void> => {
   // Check if credentials are available
   isAuthenticated.value = bitbucketService.hasCredentials()
   
+  // Check if there's a persisted refresh job that needs polling
+  if (refreshJob.value && shouldPoll()) {
+    console.log('🔄 Resuming polling for persisted job:', refreshJob.value.job_id)
+    pollRefreshJob(refreshJob.value.job_id)
+  }
+  
   // If we have credentials, test them and fetch initial data
   if (isAuthenticated.value) {
     const testResult: TestResult = await bitbucketService.testAuthentication()
@@ -59,6 +80,14 @@ onMounted(async (): Promise<void> => {
       console.error('❌ Authentication failed:', testResult.message)
       isAuthenticated.value = false
     }
+  }
+})
+
+// Cleanup polling on unmount
+onBeforeUnmount(() => {
+  if (pollInterval) {
+    clearInterval(pollInterval)
+    pollInterval = null
   }
 })
 
@@ -87,12 +116,34 @@ async function fetchHoursData(forceRefresh: boolean = false): Promise<void> {
   error.value = null
   
   try {
-    const data: ProcessedCommit[] = await bitbucketService.fetchAllData(
-      filters.value.dateRange, 
-      selectedRepos.value, 
-      forceRefresh
-    )
-    hoursData.value = data
+    if (forceRefresh) {
+      // Use new background refresh system for force refresh
+      const result = await bitbucketService.startBackgroundRefresh(
+        filters.value.dateRange, 
+        selectedRepos.value, 
+        false // Don't wait for completion - return immediately
+      )
+      
+      hoursData.value = result.data
+      
+      // Update refresh status store
+      if (result.refreshJob) {
+        setRefreshJob(result.refreshJob)
+        console.log('🚀 Background refresh started:', result.refreshJob.job_id)
+        
+        // Start polling for job completion
+        pollRefreshJob(result.refreshJob.job_id)
+      }
+    } else {
+      // Regular fetch (uses cache if available)
+      const data: ProcessedCommit[] = await bitbucketService.fetchAllData(
+        filters.value.dateRange, 
+        selectedRepos.value, 
+        forceRefresh
+      )
+      hoursData.value = data
+    }
+    
     applyFilters()
     lastUpdated.value = new Date()
   } catch (err: unknown) {
@@ -114,6 +165,129 @@ async function fetchHoursData(forceRefresh: boolean = false): Promise<void> {
 function handleForceRefresh(): void {
   console.log('Force refreshing data (bypassing cache)...')
   fetchHoursData(true)
+}
+
+// Background Job Management Functions
+async function pollRefreshJob(jobId: string): Promise<void> {
+  // Clear any existing polling
+  if (pollInterval) {
+    clearInterval(pollInterval)
+    pollInterval = null
+  }
+
+  console.log('⏱️ Starting refresh job polling:', jobId)
+  
+  const poll = async () => {
+    try {
+      const status = await bitbucketService.checkRefreshJobStatus(jobId)
+      
+      if (status) {
+        setRefreshJob(status)
+        
+        // If job is complete, failed, or cancelled, stop polling
+        if (status.is_completed || status.is_failed || status.is_cancelled) {
+          if (pollInterval) {
+            clearInterval(pollInterval)
+            pollInterval = null
+          }
+          
+          if (status.is_completed) {
+            console.log('✅ Background refresh completed!')
+            // Fetch the fresh data
+            await fetchHoursData(false)
+            
+            // Auto-hide status after a delay
+            setTimeout(() => {
+              hideStatus()
+            }, 5000)
+            
+          } else if (status.is_failed) {
+            console.error('❌ Background refresh failed:', status.error)
+          } else if (status.is_cancelled) {
+            console.log('✋ Background refresh cancelled')
+          }
+        }
+      } else {
+        // Lost track of job, stop polling
+        if (pollInterval) {
+          clearInterval(pollInterval)
+          pollInterval = null
+        }
+        console.warn('⚠️ Lost track of refresh job')
+      }
+    } catch (error) {
+      console.error('Error polling refresh job:', error)
+      // Continue polling despite error, but limit retries
+    }
+  }
+  
+  // Poll immediately, then every 3 seconds
+  await poll()
+  pollInterval = setInterval(poll, 3000)
+  
+  // Safety timeout - stop polling after 15 minutes
+  setTimeout(() => {
+    if (pollInterval) {
+      clearInterval(pollInterval)
+      pollInterval = null
+      console.warn('⏰ Refresh job polling timeout')
+    }
+  }, 15 * 60 * 1000)
+}
+
+async function handleCheckRefreshStatus(jobId: string): Promise<void> {
+  try {
+    const status = await bitbucketService.checkRefreshJobStatus(jobId)
+    if (status) {
+      setRefreshJob(status)
+      console.log('📊 Job status updated:', status.status)
+    }
+  } catch (error) {
+    console.error('Error checking refresh status:', error)
+  }
+}
+
+function handleRetryRefresh(): void {
+  console.log('🔄 Retrying background refresh...')
+  clearRefreshJob()
+  fetchHoursData(true)
+}
+
+function handleHideRefreshStatus(): void {
+  hideStatus()
+}
+
+async function handleCancelRefresh(jobId: string): Promise<void> {
+  console.log('🛑 Cancelling background refresh...', jobId)
+  
+  // Mark as cancelled in local store immediately for UI feedback
+  cancelJob()
+  
+  try {
+    const success = await bitbucketService.cancelRefreshJob(jobId)
+    
+    if (success) {
+      // Stop polling
+      if (pollInterval) {
+        clearInterval(pollInterval)
+        pollInterval = null
+      }
+      
+      console.log('✅ Job cancelled successfully')
+      
+      // Auto-hide after a short delay
+      setTimeout(() => {
+        hideStatus()
+      }, 3000)
+      
+    } else {
+      console.error('❌ Failed to cancel job')
+      // Refresh status to get accurate state from server
+      await handleCheckRefreshStatus(jobId)
+    }
+  } catch (error) {
+    console.error('Error cancelling refresh job:', error)
+  }
 }
 
 function handleClearCache(): void {
@@ -174,6 +348,12 @@ function handleExport(): void {
       @clear-cache="handleClearCache"
       @filter-change="applyFilters"
       :is-loading="isLoading"
+      :refresh-job="refreshJob"
+      :show-refresh-status="showRefreshStatus"
+      @hide-refresh-status="handleHideRefreshStatus"
+      @retry-refresh="handleRetryRefresh"
+      @cancel-refresh="handleCancelRefresh"
+      @check-refresh-status="handleCheckRefreshStatus"
     />
     
     <main class="main-content">
@@ -190,6 +370,12 @@ function handleExport(): void {
         @refresh="fetchHoursData"
         @force-refresh="handleForceRefresh"
         @clear-cache="handleClearCache"
+        :refresh-job="refreshJob"
+        :show-refresh-status="showRefreshStatus"
+        @hide-refresh-status="handleHideRefreshStatus"
+        @retry-refresh="handleRetryRefresh"
+        @cancel-refresh="handleCancelRefresh"
+        @check-refresh-status="handleCheckRefreshStatus"
       />
     </main>
   </div>

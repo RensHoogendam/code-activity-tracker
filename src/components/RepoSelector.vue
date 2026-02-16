@@ -1,81 +1,3 @@
-<template>
-  <div class="repo-selector" :class="{ compact }">
-    <div class="header">
-      <h3 v-if="!compact">Select Repositories</h3>
-      <span v-else class="compact-title">Repositories</span>
-      <div class="controls">
-        <button @click="selectAll" class="btn btn-sm">{{ compact ? 'All' : 'Select All' }}</button>
-        <button @click="selectNone" class="btn btn-sm">{{ compact ? 'None' : 'Select None' }}</button>
-        <button @click="toggleSelector" class="btn btn-primary">
-          {{ showSelector ? 'Hide' : 'Show' }} {{ compact ? '' : 'Repos' }} ({{ selectedRepos.length }})
-        </button>
-      </div>
-    </div>
-    
-    <div v-if="showSelector" class="repo-grid">
-      <div v-if="loading" class="loading">
-        <div class="spinner"></div>
-        <span>Loading repositories...</span>
-      </div>
-      
-      <div v-else-if="error" class="error">
-        <p>Failed to load repositories: {{ error }}</p>
-        <button @click="loadRepositories" class="btn btn-sm">Retry</button>
-      </div>
-      
-      <div v-else class="repo-list">
-        <div 
-          v-for="repo in availableRepos" 
-          :key="repo.id || repo.name"
-          class="repo-item"
-          :class="{ 
-            selected: selectedRepos.includes(repo.name), 
-            disabled: repo.is_enabled === false,
-            'has-toggle': repo.id
-          }"
-        >
-          <label class="repo-label">
-            <input 
-              type="checkbox" 
-              :value="repo.name"
-              :checked="selectedRepos.includes(repo.name)"
-              :disabled="repo.is_enabled === false"
-              @change="toggleRepo(repo.name)"
-            />
-            <div class="repo-info">
-              <div class="repo-header">
-                <span class="repo-name">{{ repo.name }}</span>
-                <div class="repo-badges">
-                  <span v-if="repo.is_primary" class="badge primary">Primary</span>
-                  <span v-if="repo.is_enabled === false" class="badge disabled">Disabled</span>
-                  <span v-else-if="repo.is_enabled === true" class="badge enabled">Enabled</span>
-                </div>
-              </div>
-              <div class="repo-meta">
-                <span v-if="repo.language" class="language">{{ repo.language }}</span>
-                <span v-if="repo.updated_on" class="updated">
-                  {{ formatDate(repo.updated_on) }}
-                </span>
-              </div>
-            </div>
-            <div v-if="repo.id" class="repo-actions">
-              <button 
-                @click.prevent="toggleRepositoryStatus(repo)"
-                :class="['toggle-btn', repo.is_enabled ? 'enabled' : 'disabled']"
-                :disabled="togglingRepos.has(repo.id)"
-                :title="repo.is_enabled ? 'Disable repository' : 'Enable repository'"
-              >
-                <span v-if="togglingRepos.has(repo.id)" class="toggle-spinner"></span>
-                <span v-else class="toggle-icon">{{ repo.is_enabled ? '●' : '○' }}</span>
-              </button>
-            </div>
-          </label>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted, type Ref } from 'vue'
 import { bitbucketService } from '../services/bitbucketService'
@@ -242,6 +164,84 @@ function formatDate(dateString: string | null): string {
   })
 }
 </script>
+
+<template>
+  <div class="repo-selector" :class="{ compact }">
+    <div class="header">
+      <h3 v-if="!compact">Select Repositories</h3>
+      <span v-else class="compact-title">Repositories</span>
+      <div class="controls">
+        <button @click="selectAll" class="btn btn-sm">{{ compact ? 'All' : 'Select All' }}</button>
+        <button @click="selectNone" class="btn btn-sm">{{ compact ? 'None' : 'Select None' }}</button>
+        <button @click="toggleSelector" class="btn btn-primary">
+          {{ showSelector ? 'Hide' : 'Show' }} {{ compact ? '' : 'Repos' }} ({{ selectedRepos.length }})
+        </button>
+      </div>
+    </div>
+    
+    <div v-if="showSelector" class="repo-grid">
+      <div v-if="loading" class="loading">
+        <div class="spinner"></div>
+        <span>Loading repositories...</span>
+      </div>
+      
+      <div v-else-if="error" class="error">
+        <p>Failed to load repositories: {{ error }}</p>
+        <button @click="loadRepositories" class="btn btn-sm">Retry</button>
+      </div>
+      
+      <div v-else class="repo-list">
+        <div 
+          v-for="repo in availableRepos" 
+          :key="repo.id || repo.name"
+          class="repo-item"
+          :class="{ 
+            selected: selectedRepos.includes(repo.name), 
+            disabled: repo.is_enabled === false,
+            'has-toggle': repo.id
+          }"
+        >
+          <label class="repo-label">
+            <input 
+              type="checkbox" 
+              :value="repo.name"
+              :checked="selectedRepos.includes(repo.name)"
+              :disabled="repo.is_enabled === false"
+              @change="toggleRepo(repo.name)"
+            />
+            <div class="repo-info">
+              <div class="repo-header">
+                <span class="repo-name">{{ repo.name }}</span>
+                <div class="repo-badges">
+                  <span v-if="repo.is_primary" class="badge primary">Primary</span>
+                  <span v-if="repo.is_enabled === false" class="badge disabled">Disabled</span>
+                  <span v-else-if="repo.is_enabled === true" class="badge enabled">Enabled</span>
+                </div>
+              </div>
+              <div class="repo-meta">
+                <span v-if="repo.language" class="language">{{ repo.language }}</span>
+                <span v-if="repo.updated_on" class="updated">
+                  {{ formatDate(repo.updated_on) }}
+                </span>
+              </div>
+            </div>
+            <div v-if="repo.id" class="repo-actions">
+              <button 
+                @click.prevent="toggleRepositoryStatus(repo)"
+                :class="['toggle-btn', repo.is_enabled ? 'enabled' : 'disabled']"
+                :disabled="togglingRepos.has(repo.id)"
+                :title="repo.is_enabled ? 'Disable repository' : 'Enable repository'"
+              >
+                <span v-if="togglingRepos.has(repo.id)" class="toggle-spinner"></span>
+                <span v-else class="toggle-icon">{{ repo.is_enabled ? '●' : '○' }}</span>
+              </button>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .repo-selector {
