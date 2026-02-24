@@ -46,20 +46,82 @@ const emit = defineEmits<{
 
 // Computed properties
 const metrics = computed((): DashboardMetrics => {
-  const commits = props.data.filter((item: ProcessedCommit) => item.commit_hash)
-  const prs = props.data.filter((item: ProcessedCommit) => !item.commit_hash)
-  const tickets = [...new Set(props.data.filter((item: ProcessedCommit) => item.ticket).map((item: ProcessedCommit) => item.ticket))]
-  const repos = [...new Set(props.data.map((item: ProcessedCommit) => item.repo))]
+  const days = props.filters.dateRange || 12
+  const now = new Date()
+  
+  // Define time boundaries
+  const periodEnd = new Date(now)
+  const periodStart = new Date(now)
+  periodStart.setDate(now.getDate() - days)
+  
+  const prevPeriodStart = new Date(periodStart)
+  prevPeriodStart.setDate(prevPeriodStart.getDate() - days)
+  
+  // Filter data into periods
+  const currentData = props.data.filter(item => {
+    const date = new Date(item.commit_date || item.pr_updated_on || '')
+    return date >= periodStart && date <= periodEnd
+  })
+  
+  const prevData = props.data.filter(item => {
+    const date = new Date(item.commit_date || item.pr_updated_on || '')
+    return date >= prevPeriodStart && date < periodStart
+  })
+
+  // Helper to get metrics for a dataset
+  const getPeriodStats = (dataset: ProcessedCommit[]) => {
+    const commits = dataset.filter(item => item.commit_hash).length
+    const prs = dataset.filter(item => !item.commit_hash).length
+    const tickets = new Set(dataset.filter(item => item.ticket).map(item => item.ticket)).size
+    const repos = new Set(dataset.map(item => item.repo)).size
+    return { commits, prs, tickets, repos }
+  }
+
+  const currentStats = getPeriodStats(currentData)
+  const prevStats = getPeriodStats(prevData)
+
+  // Calculate trends (%)
+  const calcTrend = (curr: number, prev: number) => {
+    if (prev === 0) return curr > 0 ? 100 : 0
+    return Math.round(((curr - prev) / prev) * 100)
+  }
+
+  // Generate history for sparklines (last X days)
+  const historyLabels: string[] = []
+  const commitsHistory: number[] = []
+  const prsHistory: number[] = []
+  const ticketsHistory: number[] = []
+  const reposHistory: number[] = []
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
+    
+    const dayData = currentData.filter(item => {
+      const itemDate = new Date(item.commit_date || item.pr_updated_on || '').toISOString().split('T')[0]
+      return itemDate === dateStr
+    })
+
+    commitsHistory.push(dayData.filter(item => item.commit_hash).length)
+    prsHistory.push(dayData.filter(item => !item.commit_hash).length)
+    ticketsHistory.push(new Set(dayData.filter(item => item.ticket).map(item => item.ticket)).size)
+    reposHistory.push(new Set(dayData.map(item => item.repo)).size)
+  }
   
   return {
-    totalCommits: commits.length,
-    totalPRs: prs.length,
-    uniqueTickets: tickets.length,
-    activeRepos: repos.length,
-    commitsTrend: Math.floor(Math.random() * 30) - 10, // Mock trends
-    prsTrend: Math.floor(Math.random() * 20) - 5,
-    ticketsTrend: Math.floor(Math.random() * 15) - 5,
-    reposTrend: Math.floor(Math.random() * 10) - 2
+    totalCommits: currentStats.commits,
+    totalPRs: currentStats.prs,
+    uniqueTickets: currentStats.tickets,
+    activeRepos: currentStats.repos,
+    commitsTrend: calcTrend(currentStats.commits, prevStats.commits),
+    prsTrend: calcTrend(currentStats.prs, prevStats.prs),
+    ticketsTrend: calcTrend(currentStats.tickets, prevStats.tickets),
+    reposTrend: calcTrend(currentStats.repos, prevStats.repos),
+    commitsHistory,
+    prsHistory,
+    ticketsHistory,
+    reposHistory
   }
 })
 

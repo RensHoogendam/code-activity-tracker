@@ -164,6 +164,11 @@ export interface DashboardMetrics {
   prsTrend: number;
   ticketsTrend: number;
   reposTrend: number;
+  // Historical data for sparklines
+  commitsHistory: number[];
+  prsHistory: number[];
+  ticketsHistory: number[];
+  reposHistory: number[];
 }
 
 export interface ActivityItem {
