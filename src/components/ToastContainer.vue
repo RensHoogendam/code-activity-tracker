@@ -61,8 +61,8 @@ const getIcon = (type: string) => {
   }
 
   &.type-info {
-    @apply border-l-brand-blue;
-    .toast-icon { @apply text-brand-blue; }
+    @apply border-l-brand-primary;
+    .toast-icon { @apply text-brand-primary; }
   }
 
   .toast-icon {
