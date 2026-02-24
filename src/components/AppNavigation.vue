@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { BarChart3, ClipboardList, Settings } from 'lucide-vue-next'
+import { BarChart3, ClipboardList, Settings, Calendar } from 'lucide-vue-next'
 
 import type { AppFilters } from '../types/bitbucket'
 
@@ -55,6 +55,10 @@ const route = useRoute()
           <router-link to="/details" class="nav-link" :class="{ active: route.path === '/details' }">
             <ClipboardList class="nav-icon" :size="16" />
             Details
+          </router-link>
+          <router-link to="/calendar" class="nav-link" :class="{ active: route.path === '/calendar' }">
+            <Calendar class="nav-icon" :size="16" />
+            Calendar
           </router-link>
           <router-link to="/settings" class="nav-link" :class="{ active: route.path === '/settings' }">
             <Settings class="nav-icon" :size="16" />
