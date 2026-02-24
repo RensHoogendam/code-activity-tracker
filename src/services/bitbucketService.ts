@@ -28,6 +28,9 @@ import type {
 
 import { refreshStatusStore } from '../stores/refreshStore'
 
+import { ApiError, AuthError, NetworkError } from '../types/errors'
+import { errorService, ErrorSeverity } from './errorService'
+
 class BitbucketService {
   private config: BitbucketServiceConfig
   private cache: ServiceCache
@@ -74,59 +77,20 @@ class BitbucketService {
         try {
           return await response.json()
         } catch (error) {
-          console.error('JSON parsing error:', { error, url })
-          return undefined
+          throw new ApiError(`Failed to parse JSON response from ${url}`, response.status, url)
         }
       }
       
-      // Enhanced error handling for Laravel backend responses
-      if (response.status === 401) {
-        console.error('🔐 Laravel backend authentication failed (401):', {
-          message: 'Backend authentication issue with Bitbucket API',
-          suggestion: 'Check Laravel backend configuration and Bitbucket token setup',
-          url: url
-        })
-      } else if (response.status === 403) {
-        console.error('🚫 Access forbidden (403):', {
-          message: 'Backend reports insufficient permissions',
-          suggestion: 'Verify Bitbucket token permissions in Laravel backend',
-          url: url
-        })
-      } else if (response.status === 404) {
-        console.error('❓ Resource not found (404):', {
-          message: 'Laravel backend endpoint not found or resource does not exist',
-          suggestion: 'Ensure Laravel backend is running and the resource exists',
-          url: url
-        })
-      } else if (response.status === 500) {
-        console.error('🔥 Laravel backend error (500):', {
-          message: 'Internal server error in Laravel backend',
-          suggestion: 'Check Laravel logs for detailed error information',
-          url: url
-        })
-      } else {
-        console.error('HTTP error:', {
-          status: response.status,
-          statusText: response.statusText,
-          url: url
-        })
-      }
+      this.handleHttpError(response, url)
     } catch (error) {
-      // Check if Laravel backend is accessible
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        console.error('🔌 Laravel backend connection failed:', {
-          message: 'Cannot connect to Laravel backend',
-          suggestion: 'Ensure Laravel backend is running on localhost:8000',
-          apiBase: this.apiBase
-        })
-      } else {
-        console.error('Delete request error:', { error, url })
-      }
+      if (error instanceof ApiError || error instanceof AuthError) throw error
+      const networkErr = new NetworkError(error instanceof Error ? error.message : 'Delete request failed')
+      this.handleNetworkError(networkErr, url)
+      throw networkErr
     }
     
     return undefined
   }
-
 
   // Laravel Backend API fetch wrapper
   private async getFetch<T = any>(url: string): Promise<T | undefined> {
@@ -145,57 +109,40 @@ class BitbucketService {
         try {
           return await response.json()
         } catch (error) {
-          console.error('JSON parsing error:', { error, url })
-          return undefined
+          throw new ApiError(`Failed to parse JSON response from ${url}`, response.status, url)
         }
       }
       
-      // Enhanced error handling for Laravel backend responses
-      if (response.status === 401) {
-        console.error('🔐 Laravel backend authentication failed (401):', {
-          message: 'Backend authentication issue with Bitbucket API',
-          suggestion: 'Check Laravel backend configuration and Bitbucket token setup',
-          url: url
-        })
-      } else if (response.status === 403) {
-        console.error('🚫 Access forbidden (403):', {
-          message: 'Backend reports insufficient permissions',
-          suggestion: 'Verify Bitbucket token permissions in Laravel backend',
-          url: url
-        })
-      } else if (response.status === 404) {
-        console.error('❓ Resource not found (404):', {
-          message: 'Laravel backend endpoint not found',
-          suggestion: 'Ensure Laravel backend is running on localhost:8000',
-          url: url
-        })
-      } else if (response.status === 500) {
-        console.error('🔥 Laravel backend error (500):', {
-          message: 'Internal server error in Laravel backend',
-          suggestion: 'Check Laravel logs for detailed error information',
-          url: url
-        })
-      } else {
-        console.error('HTTP error:', {
-          status: response.status,
-          statusText: response.statusText,
-          url: url
-        })
-      }
+      this.handleHttpError(response, url)
     } catch (error) {
-      // Check if Laravel backend is accessible
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        console.error('🔌 Laravel backend connection failed:', {
-          message: 'Cannot connect to Laravel backend',
-          suggestion: 'Ensure Laravel backend is running on localhost:8000',
-          apiBase: this.apiBase
-        })
-      } else {
-        console.error('Fetch error:', { error, url })
-      }
+      if (error instanceof ApiError || error instanceof AuthError) throw error
+      const networkErr = new NetworkError(error instanceof Error ? error.message : 'Fetch request failed')
+      this.handleNetworkError(networkErr, url)
+      throw networkErr
     }
     
     return undefined
+  }
+
+  private handleHttpError(response: Response, url: string): void {
+    if (response.status === 401) {
+      throw new AuthError('Authentication failed. Please check backend configuration.')
+    }
+
+    const errorMap: Record<number, string> = {
+      403: 'Access forbidden. Insufficient permissions.',
+      404: 'Resource not found.',
+      500: 'Internal server error in backend.'
+    }
+
+    const message = errorMap[response.status] || `HTTP Error ${response.status}: ${response.statusText}`
+    const apiError = new ApiError(message, response.status, url)
+    errorService.report(apiError, ErrorSeverity.ERROR)
+    throw apiError
+  }
+
+  private handleNetworkError(error: NetworkError, url: string): void {
+    errorService.report(error, ErrorSeverity.CRITICAL, 'Cannot connect to backend server. Is it running?')
   }
 
   // Date utilities

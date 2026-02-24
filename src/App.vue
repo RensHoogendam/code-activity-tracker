@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, provide, onBeforeUnmount, type Ref } from 'vue'
+import { ref, onMounted, provide, onBeforeUnmount, onErrorCaptured, type Ref } from 'vue'
 import AppNavigation from './components/AppNavigation.vue'
+import ToastContainer from './components/ToastContainer.vue'
 import bitbucketService from './services/bitbucketService'
+import { AuthError } from './types/errors'
+import { errorService, ErrorSeverity } from './services/errorService'
 import { useRefreshStatus } from './stores/refreshStore'
 
 import type { 
@@ -39,6 +42,22 @@ const error: Ref<string | null> = ref(null)
 const lastUpdated: Ref<Date | null> = ref(null)
 const selectedRepos: Ref<string[]> = ref([])
 
+// Global error handling
+onErrorCaptured((err, instance, info) => {
+  if (err instanceof AuthError) {
+    isAuthenticated.value = false
+  }
+  errorService.report(err, ErrorSeverity.ERROR, `Component error: ${info}`)
+  return false // Prevent error from propagating further
+})
+
+const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+  if (event.reason instanceof AuthError) {
+    isAuthenticated.value = false
+  }
+  errorService.report(event.reason, ErrorSeverity.ERROR, 'Unhandled async error')
+}
+
 // Polling management
 let pollInterval: NodeJS.Timeout | null = null
 
@@ -57,6 +76,8 @@ provide(IS_LOADING_KEY, isLoading)
 provide(IS_AUTHENTICATED_KEY, isAuthenticated)
 
 onMounted(async (): Promise<void> => {
+  window.addEventListener('unhandledrejection', handleUnhandledRejection)
+  
   // Check if credentials are available
   isAuthenticated.value = bitbucketService.hasCredentials()
   
@@ -77,7 +98,7 @@ onMounted(async (): Promise<void> => {
       // Then fetch hours data with those repositories
       await fetchHoursData()
     } else {
-      console.error('❌ Authentication failed:', testResult.message)
+      errorService.handleAuthError(new Error(testResult.message))
       isAuthenticated.value = false
     }
   }
@@ -85,6 +106,7 @@ onMounted(async (): Promise<void> => {
 
 // Cleanup polling on unmount
 onBeforeUnmount(() => {
+  window.removeEventListener('unhandledrejection', handleUnhandledRejection)
   if (pollInterval) {
     clearInterval(pollInterval)
     pollInterval = null
@@ -101,7 +123,7 @@ async function loadUserRepositories(): Promise<void> {
     
     console.log(`✅ Loaded ${selectedRepos.value.length} enabled repositories:`, selectedRepos.value)
   } catch (err) {
-    console.error('Failed to load user repositories:', err)
+    errorService.report(err, ErrorSeverity.WARNING, 'Failed to load repository selections')
     selectedRepos.value = [] // Fallback to empty array
   }
 }
@@ -147,15 +169,11 @@ async function fetchHoursData(forceRefresh: boolean = false): Promise<void> {
     applyFilters()
     lastUpdated.value = new Date()
   } catch (err: unknown) {
-    error.value = 'Failed to fetch data from Bitbucket API'
-    console.error('Fetch error:', err)
-    
-    // If it's an auth error, clear authentication
-    if (err instanceof Error && err.message && (
-      err.message.includes('credentials') || 
-      err.message.includes('401')
-    )) {
+    if (err instanceof AuthError) {
       isAuthenticated.value = false
+    } else {
+      errorService.handleApiError(err, 'Fetching Activity')
+      error.value = 'Failed to fetch data from Bitbucket API'
     }
   } finally {
     isLoading.value = false
@@ -202,7 +220,7 @@ async function pollRefreshJob(jobId: string): Promise<void> {
             }, 5000)
             
           } else if (status.is_failed) {
-            console.error('❌ Background refresh failed:', status.error)
+            errorService.report(status.error, ErrorSeverity.ERROR, 'Background refresh failed')
           } else if (status.is_cancelled) {
             console.log('✋ Background refresh cancelled')
           }
@@ -213,7 +231,7 @@ async function pollRefreshJob(jobId: string): Promise<void> {
           clearInterval(pollInterval)
           pollInterval = null
         }
-        console.warn('⚠️ Lost track of refresh job')
+        errorService.report('Lost track of refresh job', ErrorSeverity.WARNING)
       }
     } catch (error) {
       console.error('Error polling refresh job:', error)
@@ -230,7 +248,7 @@ async function pollRefreshJob(jobId: string): Promise<void> {
     if (pollInterval) {
       clearInterval(pollInterval)
       pollInterval = null
-      console.warn('⏰ Refresh job polling timeout')
+      errorService.report('Refresh job polling timeout', ErrorSeverity.WARNING)
     }
   }, 15 * 60 * 1000)
 }
@@ -242,8 +260,8 @@ async function handleCheckRefreshStatus(jobId: string): Promise<void> {
       setRefreshJob(status)
       console.log('📊 Job status updated:', status.status)
     }
-  } catch (error) {
-    console.error('Error checking refresh status:', error)
+  } catch (err) {
+    errorService.report(err, ErrorSeverity.WARNING, 'Failed to check refresh status')
   }
 }
 
@@ -281,12 +299,12 @@ async function handleCancelRefresh(jobId: string): Promise<void> {
       }, 3000)
       
     } else {
-      console.error('❌ Failed to cancel job')
+      errorService.report('Failed to cancel job', ErrorSeverity.ERROR)
       // Refresh status to get accurate state from server
       await handleCheckRefreshStatus(jobId)
     }
-  } catch (error) {
-    console.error('Error cancelling refresh job:', error)
+  } catch (err) {
+    errorService.report(err, ErrorSeverity.ERROR, 'Error cancelling refresh job')
   }
 }
 
@@ -378,6 +396,8 @@ function handleExport(): void {
         @check-refresh-status="handleCheckRefreshStatus"
       />
     </main>
+
+    <ToastContainer />
   </div>
 </template>
 
