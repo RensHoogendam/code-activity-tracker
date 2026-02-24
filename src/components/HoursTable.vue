@@ -248,243 +248,144 @@ function getRepoDisplayName(repo: string | undefined): string {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .hours-table-container {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
+  @apply bg-surface rounded-app-card shadow-sm overflow-hidden;
 
-.search-bar {
-  padding: 20px 25px;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-}
+  .search-bar {
+    @apply p-6 border-b border-gray-100 flex justify-between items-center gap-5;
 
-.search-input {
-  flex: 1;
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s ease;
-}
+    .search-input {
+      @apply flex-1 px-4 py-3 border-2 border-gray-100 rounded-lg text-base transition-colors duration-300;
 
-.search-input:focus {
-  outline: none;
-  border-color: #667eea;
-}
+      &:focus {
+        @apply outline-none border-brand-primary;
+      }
+    }
 
-.results-count {
-  color: #64748b;
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
+    .results-count {
+      @apply text-text-muted text-sm whitespace-nowrap;
+    }
+  }
 
-.table-wrapper {
-  overflow-x: auto;
-}
+  .table-wrapper {
+    @apply overflow-x-auto;
 
-.hours-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+    .hours-table {
+      @apply w-full border-collapse;
 
-.hours-table th {
-  background: #f8fafc;
-  padding: 15px 20px;
-  text-align: left;
-  font-weight: 600;
-  color: #475569;
-  border-bottom: 2px solid #e2e8f0;
-  white-space: nowrap;
-}
+      th {
+        @apply bg-gray-50 px-5 py-4 text-left font-semibold text-text-muted border-b-2 border-gray-100 whitespace-nowrap;
 
-.sortable {
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-}
+        &.sortable {
+          @apply cursor-pointer select-none relative hover:bg-gray-100;
+        }
 
-.sortable:hover {
-  background: #f1f5f9;
-}
+        .sort-indicator {
+          @apply ml-2 opacity-30 transition-all duration-300;
 
-.sort-indicator {
-  margin-left: 8px;
-  opacity: 0.3;
-  transition: all 0.3s ease;
-}
+          &.active {
+            @apply opacity-100 text-brand-primary;
+          }
 
-.sort-indicator.active {
-  opacity: 1;
-  color: #667eea;
-}
+          &:not(.desc) {
+            @apply rotate-180 inline-block;
+          }
+        }
+      }
 
-.sort-indicator.desc {
-  transform: rotate(0deg);
-}
+      td {
+        @apply px-5 py-4 border-b border-gray-50;
+      }
 
-.sort-indicator:not(.desc) {
-  transform: rotate(180deg);
-}
+      tr {
+        &:hover {
+          @apply bg-gray-50/50;
+        }
 
-.hours-table td {
-  padding: 15px 20px;
-  border-bottom: 1px solid #f1f5f9;
-  vertical-align: top;
-}
+        &.commit-row {
+          @apply border-l-4 border-brand-secondary;
+        }
 
-.commit-row {
-  border-left: 4px solid #16a34a;
-}
+        &.pr-row {
+          @apply border-l-4 border-brand-purple;
+        }
+      }
 
-.pr-row {
-  border-left: 4px solid #8b5cf6;
-}
+      .type-badge {
+        @apply inline-block px-2 py-1 rounded text-[0.75rem] font-bold uppercase;
 
-.commit-row:hover,
-.pr-row:hover {
-  background: #fafbfc;
-}
+        &.type-commit {
+          @apply bg-orange-50 text-brand-secondary;
+        }
 
-.type-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
+        &.type-pr {
+          @apply bg-purple-50 text-brand-purple;
+        }
+      }
 
-.type-commit {
-  background: #dcfce7;
-  color: #166534;
-}
+      .repo-cell {
+        @apply font-medium text-text-main;
+      }
 
-.type-pr {
-  background: #ede9fe;
-  color: #7c3aed;
-}
+      .date-cell {
+        @apply text-text-muted text-sm;
+      }
 
-.repo-cell {
-  font-weight: 500;
-  color: #475569;
-}
+      .title-cell {
+        @apply max-w-[400px];
 
-.date-cell {
-  color: #64748b;
-  font-size: 0.9rem;
-}
+        .title-content {
+          @apply leading-relaxed break-words;
+        }
+      }
 
-.title-cell {
-  max-width: 400px;
-}
+      .branch-badge {
+        @apply bg-orange-50 text-brand-secondary px-2 py-1 rounded text-[0.75rem] font-medium border border-orange-100;
+      }
 
-.title-content {
-  line-height: 1.4;
-  word-break: break-word;
-}
+      .no-branch {
+        @apply text-gray-400 italic;
+      }
 
-.issue-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
+      .issue-actions {
+        @apply flex gap-2 items-center;
 
-.copy-btn {
-  background: #667eea;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
+        .copy-btn {
+          @apply bg-brand-primary text-white border-none px-3 py-1.5 rounded-md text-[0.8rem] font-medium cursor-pointer transition-all duration-300 hover:bg-brand-primary-hover active:translate-y-0 -translate-y-[1px];
+        }
 
-.copy-btn:hover {
-  background: #5a67d8;
-  transform: translateY(-1px);
-}
+        .issue-link {
+          @apply inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-text-muted no-underline rounded text-[0.8rem] transition-colors duration-300 hover:bg-gray-200 hover:text-text-main;
+        }
 
-.copy-btn:active {
-  transform: translateY(0);
-}
+        .ticket-source {
+          @apply text-[0.7rem] text-text-muted italic ml-1;
+        }
+      }
 
-.issue-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: #f1f5f9;
-  color: #64748b;
-  text-decoration: none;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  transition: all 0.3s ease;
-}
-
-.issue-link:hover {
-  background: #e2e8f0;
-  color: #475569;
-}
-
-.ticket-source {
-  font-size: 0.7rem;
-  color: #6b7280;
-  font-style: italic;
-  margin-left: 4px;
-}
-
-/* Branch Column Styling */
-.branch-cell {
-  text-align: center;
-  width: 100px;
-}
-
-.branch-badge {
-  background: #fef3e2;
-  color: #f97316;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid #fed7aa;
-}
-
-.no-branch {
-  color: #9ca3af;
-  font-style: italic;
-}
-
-.no-data {
-  text-align: center;
-  color: #94a3b8;
-  font-style: italic;
-  padding: 40px 20px;
+      .no-data {
+        @apply text-center text-gray-400 italic py-10 px-5;
+      }
+    }
+  }
 }
 
 @media (max-width: 768px) {
-  .search-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 15px;
-  }
-  
-  .hours-table th,
-  .hours-table td {
-    padding: 10px 15px;
-  }
-  
-  .title-cell {
-    max-width: 250px;
+  .hours-table-container {
+    .search-bar {
+      @apply flex-col items-stretch gap-4;
+    }
+    
+    .hours-table {
+      th, td {
+        @apply px-4 py-3;
+      }
+      
+      .title-cell {
+        @apply max-w-[250px];
+      }
+    }
   }
 }
 </style>

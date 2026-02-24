@@ -190,35 +190,21 @@ function onFiltersChange(newFilters: Partial<AppFilters>): void {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .calendar-page {
-  background: #f4f5f7;
-  min-height: calc(100vh - 56px);
-}
+  @apply bg-app-bg min-h-[calc(100vh-var(--spacing-header-height))];
 
-.calendar-content {
-  padding: 20px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
+  .calendar-content {
+    @apply p-5 max-w-content-width mx-auto;
 
-.calendar-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+    .calendar-container {
+      @apply flex flex-col gap-5;
 
-.calendar-wrapper {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      .calendar-wrapper {
+        @apply bg-surface p-5 rounded-app-card shadow-sm;
+      }
+    }
+  }
 }
 
 /* FullCalendar Customization */
@@ -232,169 +218,91 @@ function onFiltersChange(newFilters: Partial<AppFilters>): void {
   --fc-event-border-color: transparent;
   --fc-today-bg-color: rgba(249, 115, 22, 0.05);
   font-family: inherit;
-}
 
-:deep(.fc-event) {
-  cursor: pointer;
-  padding: 2px 4px;
-  font-size: 0.85em;
-}
+  .fc-event {
+    @apply cursor-pointer px-1 py-0.5 text-[0.85em];
+  }
 
-:deep(.fc-toolbar-title) {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  .fc-toolbar-title {
+    @apply text-xl font-semibold text-text-main;
+  }
 }
 
 /* Modal Styles */
 .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
+  @apply fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-5;
 
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 500px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
+  .modal-content {
+    @apply bg-surface rounded-app-card w-full max-w-[500px] shadow-2xl overflow-hidden;
 
-.modal-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+    .modal-header {
+      @apply px-5 py-4 border-b border-border-light flex justify-between items-center;
 
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-}
+      h3 {
+        @apply m-0 text-lg font-semibold text-text-main;
+      }
 
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
+      .close-btn {
+        @apply bg-transparent border-none text-2xl text-text-muted cursor-pointer p-0 leading-none;
+      }
+    }
 
-.modal-body {
-  padding: 20px;
-}
+    .modal-body {
+      @apply p-5;
 
-.detail-row {
-  margin-bottom: 16px;
-}
+      .detail-row {
+        @apply mb-4 last:mb-0;
 
-.detail-row:last-child {
-  margin-bottom: 0;
-}
+        .detail-label {
+          @apply block text-[12px] uppercase tracking-wider text-text-muted mb-1;
+        }
 
-.detail-label {
-  display: block;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
+        .detail-value {
+          @apply text-sm text-text-main font-medium;
 
-.detail-value {
-  font-size: 14px;
-  color: #1f2937;
-  font-weight: 500;
-}
+          &.ticket-badge {
+            @apply inline-block bg-blue-50 text-brand-primary px-2 py-0.5 rounded font-semibold;
+          }
 
-.ticket-badge {
-  display: inline-block;
-  background: #eff6ff;
-  color: #2563eb;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.message-text {
-  white-space: pre-wrap;
-  background: #f9fafb;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  max-height: 200px;
-  overflow-y: auto;
+          &.message-text {
+            @apply whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-border-light max-h-[200px] overflow-y-auto;
+          }
+        }
+      }
+    }
+  }
 }
 
 /* State Components */
 .loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  gap: 16px;
-}
+  @apply flex flex-col items-center justify-center min-h-[60vh] gap-4;
 
-.loading-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #f3f4f6;
-  border-top: 3px solid #F97316;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
+  .loading-spinner {
+    @apply w-8 h-8 border-[3px] border-gray-100 border-t-brand-secondary rounded-full animate-spin;
+  }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  p {
+    @apply text-text-muted;
+  }
 }
 
 .empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  padding: 24px;
-}
+  @apply flex items-center justify-center min-h-[60vh] p-6;
 
-.empty-content {
-  text-align: center;
-  max-width: 400px;
-}
+  .empty-content {
+    @apply text-center max-w-[400px];
 
-.empty-content h3 {
-  color: #1f2937;
-  margin-bottom: 16px;
-  font-size: 20px;
-}
+    h3 {
+      @apply text-text-main mb-4 text-xl;
+    }
 
-.empty-content p {
-  color: #6b7280;
-  line-height: 1.6;
+    p {
+      @apply text-text-muted leading-relaxed;
+    }
+  }
 }
 
 .error-message {
-  background: #fee;
-  color: #dc2626;
-  padding: 16px;
-  border-radius: 8px;
-  margin: 24px;
-  text-align: center;
+  @apply bg-red-50 text-error p-4 rounded-lg m-6 text-center;
 }
 </style>

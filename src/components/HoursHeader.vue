@@ -112,211 +112,143 @@ function handleReposChanged(repos: string[]): void {
   </header>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .hours-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
+  @apply bg-brand-primary text-white shadow-md relative;
 
-.container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0;
-}
+  .container {
+    @apply max-w-content-width mx-auto;
 
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  min-height: 80px;
-}
+    .header-content {
+      @apply flex justify-between items-center px-6 py-5 min-h-[80px];
 
-.title-section {
-  flex: 1;
-}
+      .title-section {
+        @apply flex-1;
 
-.title-section h1 {
-  margin: 0 0 4px 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: white;
-}
+        h1 {
+          @apply m-0 mb-1 text-[2rem] font-bold text-white;
+        }
 
-.subtitle {
-  margin: 0;
-  font-size: 1rem;
-  opacity: 0.9;
-  color: white;
-}
+        .subtitle {
+          @apply m-0 text-base opacity-90 text-white;
+        }
+      }
 
-.actions-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-}
+      .actions-section {
+        @apply flex items-center gap-2 relative;
 
-.last-updated {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  font-size: 0.9rem;
-}
+        .last-updated {
+          @apply flex flex-col items-end text-[0.9rem];
 
-.label {
-  opacity: 0.8;
-  margin-bottom: 2px;
-}
+          .label {
+            @apply opacity-80 mb-0.5;
+          }
 
-.time {
-  font-weight: 600;
-}
+          .time {
+            @apply font-semibold;
+          }
+        }
 
-.refresh-controls {
-  display: flex;
-  gap: 8px;
-}
+        .refresh-controls {
+          @apply flex gap-2;
 
-.refresh-btn, .cache-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.3);
-  color: white;
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-}
+          .refresh-btn, .cache-btn {
+            @apply flex items-center gap-2 bg-white/20 border border-white/30 text-white px-5 py-3 rounded-lg text-base font-medium cursor-pointer transition-all duration-300 backdrop-blur-md;
 
-.cache-btn {
-  padding: 12px;
-  min-width: auto;
-}
+            &:hover {
+              @apply bg-white/30 border-white/40;
+            }
 
-.refresh-btn:hover, .cache-btn:hover {
-  background: rgba(255,255,255,0.3);
-  border-color: rgba(255,255,255,0.4);
-}
+            &:disabled {
+              @apply opacity-60 cursor-not-allowed;
+            }
 
-.refresh-btn:disabled, .cache-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+            .icon.spinning {
+              @apply animate-spin;
+            }
+          }
 
-.icon.spinning {
-  animation: spin 1s linear infinite;
-}
+          .cache-btn {
+            @apply p-3 min-w-0;
+          }
+        }
+      }
+    }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+    .repo-section {
+      @apply border-t border-white/20 px-6 py-4;
 
-.cache-menu {
-  position: relative;
-}
+      .repo-selector {
+        @apply mb-0;
+      }
+    }
+  }
 
-.cache-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  overflow: hidden;
-  z-index: 1000;
-  min-width: 160px;
-}
+  .cache-menu {
+    @apply relative;
 
-.cache-dropdown button {
-  display: block;
-  width: 100%;
-  padding: 12px 16px;
-  background: none;
-  border: none;
-  color: #374151;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
+    .cache-dropdown {
+      @apply absolute top-full right-0 mt-2 bg-white rounded-lg shadow-xl overflow-hidden z-[1000] min-w-[160px];
 
-.cache-dropdown button:hover {
-  background: #f9fafb;
-}
+      button {
+        @apply block w-full px-4 py-3 bg-transparent border-none text-text-main text-left cursor-pointer transition-colors duration-200;
 
-.repo-section {
-  border-top: 1px solid rgba(255,255,255,0.2);
-  padding: 16px 24px;
-}
-
-.repo-section .repo-selector {
-  margin-bottom: 0;
+        &:hover {
+          @apply bg-gray-50;
+        }
+      }
+    }
+  }
 }
 
 /* Responsive design */
 @media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 16px 20px;
-  }
-  
-  .actions-section {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-    gap: 12px;
-  }
-  
-  .refresh-controls {
-    justify-content: flex-end;
-  }
-  
-  .last-updated {
-    align-items: flex-start;
-    font-size: 0.8rem;
-  }
-  
-  .title-section h1 {
-    font-size: 1.5rem;
-  }
-  
-  .subtitle {
-    font-size: 0.9rem;
+  .hours-header .container {
+    .header-content {
+      @apply flex-col items-start gap-4 px-5 py-4;
+    }
+    
+    .actions-section {
+      @apply flex flex-col items-stretch w-full gap-3;
+
+      .refresh-controls {
+        @apply justify-end;
+      }
+      
+      .last-updated {
+        @apply items-start text-[0.8rem];
+      }
+    }
+    
+    .title-section h1 {
+      @apply text-2xl;
+    }
+    
+    .subtitle {
+      @apply text-[0.9rem];
+    }
   }
 }
 
 @media (max-width: 480px) {
-  .container {
-    padding: 0;
-  }
-  
-  .header-content {
-    padding: 12px 16px;
-  }
-  
-  .repo-section {
-    padding: 12px 16px;
-  }
-  
-  .refresh-btn, .cache-btn {
-    padding: 10px 16px;
-    font-size: 0.9rem;
-  }
-  
-  .cache-btn {
-    padding: 10px;
+  .hours-header .container {
+    .header-content {
+      @apply px-4 py-3;
+    }
+    
+    .repo-section {
+      @apply px-4 py-3;
+    }
+    
+    .refresh-controls {
+      .refresh-btn, .cache-btn {
+        @apply px-4 py-2.5 text-[0.9rem];
+      }
+      
+      .cache-btn {
+        @apply p-2.5;
+      }
+    }
   }
 }
 </style>

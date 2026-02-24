@@ -84,82 +84,54 @@ function handleSelectChange(event: Event, key: keyof AppFilters): void {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .hours-filters {
-  background: white;
-  border-radius: 12px;
-  padding: 25px;
-  margin-bottom: 25px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 25px;
-  align-items: center;
-}
+  @apply bg-surface rounded-app-card p-6 mb-6 shadow-sm flex flex-wrap gap-6 items-center;
 
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 160px;
-}
+  .filter-group {
+    @apply flex flex-col gap-2 min-w-[160px];
 
-.filter-group label {
-  font-weight: 600;
-  color: #555;
-  font-size: 0.9rem;
-}
+    label {
+      @apply font-semibold text-text-muted text-sm;
+    }
 
-.filter-group select {
-  padding: 10px 12px;
-  border: 2px solid #e0e7ff;
-  border-radius: 8px;
-  background: white;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: border-color 0.3s ease;
-}
+    select {
+      @apply px-3 py-2 border-2 border-gray-100 rounded-lg bg-white text-base cursor-pointer transition-colors duration-300;
 
-.filter-group select:focus {
-  outline: none;
-  border-color: #667eea;
-}
+      &:focus {
+        @apply outline-none border-brand-primary;
+      }
 
-.filter-group select:hover {
-  border-color: #c7d2fe;
-}
+      &:hover {
+        @apply border-gray-200;
+      }
+    }
+  }
 
-.filter-info {
-  margin-left: auto;
-  padding: 12px 20px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border-left: 4px solid #667eea;
-}
+  .filter-info {
+    @apply ml-auto px-5 py-3 bg-gray-50 rounded-lg border-l-4 border-brand-primary;
 
-.author-info {
-  color: #64748b;
-  font-size: 0.95rem;
-}
+    .author-info {
+      @apply text-text-muted text-[0.95rem];
 
-.author-info strong {
-  color: #1e293b;
+      strong {
+        @apply text-text-main;
+      }
+    }
+  }
 }
 
 @media (max-width: 768px) {
   .hours-filters {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 15px;
-  }
-  
-  .filter-group {
-    min-width: auto;
-  }
-  
-  .filter-info {
-    margin-left: 0;
-    text-align: center;
+    @apply flex-col items-stretch gap-4;
+    
+    .filter-group {
+      @apply min-w-full;
+    }
+    
+    .filter-info {
+      @apply ml-0 text-center;
+    }
   }
 }
 </style>

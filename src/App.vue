@@ -381,32 +381,22 @@ function handleExport(): void {
   </div>
 </template>
 
-<style>
-@reference "./style.css";
-
+<style scoped lang="scss">
 .main-content {
-  @apply flex-1 w-full mx-auto px-0;
-  max-width: var(--max-content-width);
-}
-
-/* Global utility classes that aren't pure Tailwind */
-.btn {
-  @apply px-4 py-2 bg-white border border-gray-300 rounded-app-btn text-gray-700 text-sm 
-         cursor-pointer transition-all hover:bg-gray-100 hover:border-gray-400;
-  font-family: inherit;
+  @apply flex-1 w-full mx-auto px-0 max-w-content-width;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
-}
 
-::-webkit-scrollbar-track {
-  @apply bg-gray-100 rounded;
-}
+  &-track {
+    @apply bg-gray-100 rounded;
+  }
 
-::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded hover:bg-gray-400;
+  &-thumb {
+    @apply bg-gray-300 rounded hover:bg-gray-400;
+  }
 }
 </style>

@@ -9,36 +9,16 @@
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .loading-spinner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-}
+  @apply flex flex-col items-center justify-center p-[60px_20px] bg-surface rounded-app-card shadow-sm;
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #f3f4f6;
-  border-top: 3px solid #667eea;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
-}
+  .spinner {
+    @apply w-10 h-10 border-[3px] border-gray-100 border-t-brand-primary rounded-full animate-spin mb-5;
+  }
 
-.loading-text {
-  color: #64748b;
-  font-size: 1rem;
-  margin: 0;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  .loading-text {
+    @apply text-text-muted text-base m-0;
+  }
 }
 </style>

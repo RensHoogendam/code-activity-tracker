@@ -30,6 +30,21 @@
 - **Visual Feedback:** Always provide loading and error states for asynchronous operations.
 - **Responsive Design:** Use Tailwind's breakpoint system (integrated into SCSS nesting) to ensure the dashboard works on all screen sizes.
 
+## Design System & Theme
+
+### Core Colors
+- **Primary:** `brand-primary` (#104a33) - Used for primary actions and brand presence.
+- **Secondary:** `brand-secondary` (#F97316) - Used for accents and highlights (e.g., orange).
+- **Purple:** `brand-purple` (#8b5cf6) - Used for Pull Requests.
+- **Status:** `success` (#16A34A), `warning` (#F59E0B), `error` (#DC2626).
+- **Surface:** `app-bg` (#F4F5F7) for backgrounds, `surface` (#FFFFFF) for cards.
+- **Text:** `text-main` (#1F2937), `text-muted` (#6B7280), `text-inverse` (#FFFFFF).
+
+### Layout & Sizing
+- **Header Height:** `var(--spacing-header-height)` (56px).
+- **Max Width:** `max-w-content-width` (1400px) - Use for main containers.
+- **Border Radius:** `rounded-app-card` (12px), `rounded-app-btn` (8px).
+
 ## Workflow
 - **Vite Config:** The project is configured to automatically inject `@reference "@/style.css"` into all SCSS blocks. Do not add this manually to components.
 - **Theme Updates:** Any new global colors or spacing should be added to the `@theme` block in `src/style.css`.

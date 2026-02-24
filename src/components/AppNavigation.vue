@@ -70,140 +70,98 @@ const route = useRoute()
   </nav>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .app-navigation {
-  background: #0052CC;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
+  @apply bg-brand-primary text-white shadow-md sticky top-0 z-[100];
 
-.nav-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 24px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+  .nav-container {
+    @apply max-w-content-width mx-auto px-6 h-[var(--spacing-header-height)] flex items-center justify-between;
+  }
 
-.nav-left {
-  display: flex;
-  align-items: center;
-}
+  .nav-left {
+    @apply flex items-center;
 
-.brand {
-  display: flex;
-  flex-direction: column;
-}
+    .brand {
+      @apply flex flex-col;
 
-.brand h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.2;
-}
+      h1 {
+        @apply text-xl font-semibold m-0 leading-[1.2];
+      }
 
-.subtitle {
-  font-size: 0.75rem;
-  opacity: 0.8;
-  font-weight: 400;
-  line-height: 1;
-  margin-top: 2px;
-}
+      .subtitle {
+        @apply text-xs opacity-80 font-normal leading-none mt-0.5;
+      }
+    }
+  }
 
-.nav-right {
-  display: flex;
-  align-items: center;
-}
+  .nav-right {
+    @apply flex items-center;
 
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
+    .nav-links {
+      @apply flex items-center gap-0;
 
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: rgba(255,255,255,0.8);
-  text-decoration: none;
-  padding: 12px 16px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  border-radius: 0;
-  position: relative;
-}
+      .nav-link {
+        @apply flex items-center gap-2 text-white/80 no-underline px-4 py-3 text-sm font-medium transition-all duration-200 relative;
 
-.nav-link:hover {
-  color: white;
-  background: rgba(255,255,255,0.1);
-}
+        &:hover {
+          @apply text-white bg-white/10;
+        }
 
-.nav-link.active {
-  color: white;
-  background: rgba(255,255,255,0.15);
-}
+        &.active {
+          @apply text-white bg-white/15;
 
-.nav-link.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: #36B37E;
-}
+          &::after {
+            content: '';
+            @apply absolute bottom-0 left-0 right-0 h-[3px] bg-[#36B37E];
+          }
+        }
 
-.nav-icon {
-  flex-shrink: 0;
-  color: inherit;
+        .nav-icon {
+          @apply shrink-0 text-inherit;
+        }
+      }
+    }
+  }
 }
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
-  .nav-container {
-    padding: 0 16px;
-  }
-  
-  .nav-links {
-    gap: 0;
-  }
-  
-  .nav-link {
-    padding: 12px 12px;
-    font-size: 0.8rem;
-  }
-  
-  .nav-icon {
-    font-size: 0.9rem;
-  }
-  
-  .brand h1 {
-    font-size: 1.1rem;
-  }
-  
-  .subtitle {
-    display: none;
+  .app-navigation {
+    .nav-container {
+      @apply px-4;
+    }
+    
+    .nav-right .nav-links .nav-link {
+      @apply px-3 text-[0.8rem];
+
+      .nav-icon {
+        @apply text-[0.9rem];
+      }
+    }
+    
+    .nav-left .brand {
+      h1 {
+        @apply text-[1.1rem];
+      }
+
+      .subtitle {
+        @apply hidden;
+      }
+    }
   }
 }
 
 @media (max-width: 480px) {
-  .nav-link span {
-    display: none;
+  .app-navigation .nav-right .nav-links .nav-link {
+    @apply px-2.5;
+
+    span {
+      @apply hidden;
+    }
   }
-  
-  .nav-link {
-    padding: 12px 10px;
-  }
-  
-  .brand h1 {
-    font-size: 1rem;
+
+  .app-navigation .nav-left .brand h1 {
+    @apply text-base;
   }
 }
 </style>

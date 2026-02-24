@@ -299,252 +299,169 @@ function getProgressFromMessage(message: string): { current: number; total: numb
   </Transition>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .refresh-status {
-  position: relative;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  padding: 16px 20px;
-  margin: 8px 0;
-  border-left: 4px solid #6b7280;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
+  @apply relative bg-surface rounded-app-card shadow-xl p-4 my-2 border-l-4 border-text-muted overflow-hidden transition-all duration-300;
 
-/* Status Color Variants */
-.status-started,
-.status-processing {
-  border-left-color: #3b82f6;
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%);
-}
+  /* Status Color Variants */
+  &.status-started,
+  &.status-processing {
+    @apply border-l-brand-primary bg-gradient-to-r from-blue-50/50 to-transparent;
+  }
 
-.status-completed {
-  border-left-color: #10b981;
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.05) 0%, transparent 100%);
-}
+  &.status-completed {
+    @apply border-l-success bg-gradient-to-r from-green-50/50 to-transparent;
+  }
 
-.status-failed {
-  border-left-color: #ef4444;
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.05) 0%, transparent 100%);
-}
+  &.status-failed {
+    @apply border-l-error bg-gradient-to-r from-red-50/50 to-transparent;
+  }
 
-.status-cancelled {
-  border-left-color: #f59e0b;
-  background: linear-gradient(90deg, rgba(245, 158, 11, 0.05) 0%, transparent 100%);
-}
+  &.status-cancelled {
+    @apply border-l-warning bg-gradient-to-r from-orange-50/50 to-transparent;
+  }
 
-.status-idle {
-  border-left-color: #6b7280;
-  background: linear-gradient(90deg, rgba(107, 114, 128, 0.05) 0%, transparent 100%);
-}
+  &.status-idle {
+    @apply border-l-text-muted bg-gradient-to-r from-gray-50/50 to-transparent;
+  }
 
-/* Content Layout */
-.status-content {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  position: relative;
-  z-index: 2;
-}
+  /* Content Layout */
+  .status-content {
+    @apply flex items-center gap-3.5 relative z-[2];
 
-.status-icon {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
+    .status-icon {
+      @apply shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-white/80 shadow-sm;
 
-.status-started .status-icon,
-.status-processing .status-icon {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  color: #3b82f6;
-}
+      .animate-spin {
+        @apply animate-[spin_1.5s_linear_infinite];
+      }
+    }
+  }
 
-.status-completed .status-icon {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #10b981;
-}
+  &.status-started,
+  &.status-processing {
+    .status-icon {
+      @apply bg-gradient-to-br from-blue-50 to-blue-200 text-brand-primary;
+    }
+  }
 
-.status-failed .status-icon {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  color: #ef4444;
-}
+  &.status-completed .status-icon {
+    @apply bg-gradient-to-br from-green-50 to-green-200 text-success;
+  }
 
-.status-cancelled .status-icon {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  color: #f59e0b;
-}
+  &.status-failed .status-icon {
+    @apply bg-gradient-to-br from-red-50 to-red-200 text-error;
+  }
 
-.animate-spin {
-  animation: spin 1.5s linear infinite;
-}
+  &.status-cancelled .status-icon {
+    @apply bg-gradient-to-br from-orange-50 to-orange-200 text-warning;
+  }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+  /* Text Content */
+  .status-text {
+    @apply flex-1 min-w-0;
 
-/* Text Content */
-.status-text {
-  flex: 1;
-  min-width: 0;
-}
+    .status-message {
+      @apply text-[0.95rem] font-semibold text-text-main mb-1 leading-[1.3];
+    }
 
-.status-message {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 4px;
-  line-height: 1.3;
-}
+    .status-details {
+      @apply flex flex-wrap gap-3 text-[0.8rem] text-text-muted mt-1.5;
 
-.status-details {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 0.8rem;
-  color: #6b7280;
-}
+      .job-id {
+        @apply font-mono px-1.5 py-0.5 bg-black/5 rounded;
+      }
 
-.job-id {
-  font-family: 'Monaco', 'Menlo', monospace;
-  padding: 2px 6px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-}
+      .time-elapsed {
+        @apply flex items-center font-medium;
+      }
 
-.time-elapsed {
-  display: flex;
-  align-items: center;
-  font-weight: 500;
-}
+      .time-since-update {
+        @apply text-warning font-medium;
+      }
+    }
 
-.progress-text {
-  font-weight: 600;
-  color: #3b82f6;
-}
+    /* Job Parameters */
+    .job-parameters {
+      @apply mt-2 flex flex-wrap gap-3 text-[0.75rem];
 
-/* Job Parameters */
-.job-parameters {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 0.75rem;
-}
+      .param-item {
+        @apply flex gap-1 items-center bg-black/5 px-2 py-0.5 rounded border border-black/10;
 
-.param-item {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  background: rgba(0, 0, 0, 0.03);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
+        .param-label {
+          @apply text-text-muted font-medium;
+        }
 
-.param-label {
-  color: #6b7280;
-  font-weight: 500;
-}
+        .param-value {
+          @apply text-text-main font-semibold font-mono;
+        }
+      }
+    }
 
-.param-value {
-  color: #374151;
-  font-weight: 600;
-  font-family: 'Monaco', 'Menlo', monospace;
-}
+    /* Repository Progress */
+    .repo-progress {
+      @apply mt-2 py-2 border-t border-black/10;
 
-/* Repository Progress */
-.repo-progress {
-  margin-top: 8px;
-  padding: 8px 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
+      .progress-info {
+        @apply flex justify-between items-center mb-1.5 text-[0.8rem];
 
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 0.8rem;
-}
+        .current-repo {
+          @apply text-text-main font-semibold font-mono flex-1 truncate;
+        }
 
-.current-repo {
-  color: #374151;
-  font-weight: 600;
-  font-family: 'Monaco', 'Menlo', monospace;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+        .progress-fraction {
+          @apply text-text-muted font-semibold ml-2;
+        }
+      }
 
-.progress-fraction {
-  color: #6b7280;
-  font-weight: 600;
-  margin-left: 8px;
-}
+      .mini-progress-bar {
+        @apply h-[3px] bg-black/10 rounded-[2px] overflow-hidden;
 
-.mini-progress-bar {
-  height: 3px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
-}
+        .mini-progress-fill {
+          @apply h-full bg-gradient-to-r from-success to-green-600 rounded-[2px] transition-[width] duration-500 ease-in-out;
+        }
+      }
+    }
+  }
 
-.mini-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-  border-radius: 2px;
-  transition: width 0.5s ease;
-}
+  /* Progress Bar */
+  .progress-container {
+    @apply w-full mt-2;
 
-.time-since-update {
-  color: #f59e0b;
-  font-weight: 500;
-}
+    .progress-bar {
+      @apply w-full h-1 bg-black/10 rounded-[2px] overflow-hidden;
 
-.cancelled-status {
-  color: #f59e0b;
-  font-weight: 600;
-}
+      .progress-fill {
+        @apply h-full bg-gradient-to-r from-brand-primary to-blue-700 rounded-[2px] transition-[width] duration-300 ease-in-out animate-[shimmer_2s_infinite];
+      }
+    }
+  }
 
-/* Enhanced Status Details */
-.status-details {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin-top: 6px;
-}
+  /* Action Buttons */
+  .status-actions {
+    @apply flex items-center gap-2 shrink-0;
 
-/* Progress Bar */
-.progress-container {
-  width: 100%;
-  margin-top: 8px;
-}
+    .action-btn {
+      @apply flex items-center justify-center px-2.5 py-1.5 border border-gray-200 bg-white text-text-muted rounded-md text-[0.8rem] font-medium cursor-pointer transition-all duration-200 min-w-[32px] h-8 hover:bg-gray-50 hover:border-gray-300;
 
-.progress-bar {
-  width: 100%;
-  height: 4px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
-}
+      &.retry-btn {
+        @apply text-brand-primary border-brand-primary hover:bg-blue-50;
+      }
 
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-  animation: shimmer 2s infinite;
+      &.cancel-btn {
+        @apply text-warning border-warning hover:bg-orange-50;
+      }
+
+      &.close-btn {
+        @apply text-lg font-bold text-gray-400 hover:text-text-muted hover:bg-gray-100;
+      }
+    }
+  }
+
+  /* Pulse Animation */
+  .pulse-ring {
+    @apply absolute top-1/2 left-8 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border-2 border-brand-primary/30 rounded-full animate-[pulse-ring_2s_infinite] z-[1];
+  }
 }
 
 @keyframes shimmer {
@@ -553,165 +470,72 @@ function getProgressFromMessage(message: string): { current: number; total: numb
   100% { transform: translateX(100%); opacity: 0.6; }
 }
 
-/* Action Buttons */
-.status-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  color: #6b7280;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 32px;
-  height: 32px;
-}
-
-.action-btn:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-}
-
-.retry-btn {
-  color: #3b82f6;
-  border-color: #3b82f6;
-}
-
-.retry-btn:hover {
-  background: #eff6ff;
-}
-
-.cancel-btn {
-  color: #f59e0b;
-  border-color: #f59e0b;
-}
-
-.cancel-btn:hover {
-  background: #fefbf3;
-}
-
-.close-btn {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: #9ca3af;
-}
-
-.close-btn:hover {
-  color: #6b7280;
-  background: #f3f4f6;
-}
-
-/* Pulse Animation */
-.pulse-ring {
-  position: absolute;
-  top: 50%;
-  left: 32px;
-  transform: translate(-50%, -50%);
-  width: 40px;
-  height: 40px;
-  border: 2px solid rgba(59, 130, 246, 0.3);
-  border-radius: 50%;
-  animation: pulse-ring 2s infinite;
-  z-index: 1;
-}
-
 @keyframes pulse-ring {
-  0% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(2);
-    opacity: 0;
-  }
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
 }
 
 /* Transitions */
 .refresh-status-enter-active,
 .refresh-status-leave-active {
-  transition: all 0.4s ease;
+  @apply transition-all duration-400 ease-in-out;
 }
 
-.refresh-status-enter-from {
-  transform: translateY(-20px);
-  opacity: 0;
-}
-
+.refresh-status-enter-from,
 .refresh-status-leave-to {
-  transform: translateY(-20px);
-  opacity: 0;
+  @apply -translate-y-5 opacity-0;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
   .refresh-status {
-    padding: 12px 16px;
-    margin: 6px 0;
-  }
-  
-  .status-content {
-    gap: 10px;
-  }
-  
-  .status-icon {
-    width: 36px;
-    height: 36px;
-  }
-  
-  .status-message {
-    font-size: 0.9rem;
-  }
-  
-  .status-details {
-    gap: 8px;
-    font-size: 0.75rem;
-  }
-  
-  .job-parameters {
-    flex-direction: column;
-    gap: 6px;
-    font-size: 0.7rem;
-  }
-  
-  .param-item {
-    padding: 2px 6px;
-  }
-  
-  .repo-progress {
-    margin-top: 6px;
-    padding: 6px 0;
-  }
-  
-  .progress-info {
-    font-size: 0.75rem;
-  }
-  
-  .current-repo {
-    max-width: 150px;
-  }
-  
-  .action-btn {
-    padding: 4px 8px;
-    min-width: 28px;
-    height: 28px;
-    font-size: 0.75rem;
-  }
-  
-  .pulse-ring {
-    left: 28px;
-    width: 36px;
-    height: 36px;
+    @apply px-4 py-3 my-1.5;
+
+    .status-content {
+      @apply gap-2.5;
+
+      .status-icon {
+        @apply w-9 h-9;
+      }
+    }
+
+    .status-text {
+      .status-message {
+        @apply text-[0.9rem];
+      }
+
+      .status-details {
+        @apply gap-2 text-[0.75rem];
+      }
+
+      .job-parameters {
+        @apply flex-col gap-1.5 text-[0.7rem];
+
+        .param-item {
+          @apply px-1.5 py-0.5;
+        }
+      }
+
+      .repo-progress {
+        @apply mt-1.5 py-1.5;
+
+        .progress-info {
+          @apply text-[0.75rem];
+
+          .current-repo {
+            @apply max-w-[150px];
+          }
+        }
+      }
+    }
+
+    .status-actions .action-btn {
+      @apply px-2 py-1 min-w-[28px] h-7 text-[0.75rem];
+    }
+
+    .pulse-ring {
+      @apply left-7 w-9 h-9;
+    }
   }
 }
 </style>

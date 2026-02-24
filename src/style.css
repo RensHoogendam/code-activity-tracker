@@ -11,6 +11,12 @@
   --color-brand-primary: #104a33;
   --color-brand-primary-hover: #165e42;
 
+  /* --color-brand-primary: #0052CC;
+  --color-brand-primary-hover: #003A8C; */
+
+  --color-brand-purple: #8b5cf6;
+  --color-brand-purple-hover: #7c3aed;
+
   /* 
     --- STATUS COLORS ---
     Used for feedback, errors, and state indications.

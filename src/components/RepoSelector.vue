@@ -243,338 +243,164 @@ function formatDate(dateString: string | null): string {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .repo-selector {
-  background: white;
-  border: 1px solid #e1e5e9;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
+  @apply bg-surface border border-border-light rounded-lg mb-5;
 
-.repo-selector.compact {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 6px;
-  margin-bottom: 0;
-}
+  &.compact {
+    @apply bg-transparent border-white/30 rounded-md mb-0;
+  }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e1e5e9;
-  background: #f8f9fa;
-  border-radius: 8px 8px 0 0;
-}
+  .header {
+    @apply flex justify-between items-center px-5 py-4 border-b border-border-light bg-gray-50 rounded-t-lg;
 
-.compact .header {
-  padding: 10px 15px;
-  border-bottom: 1px solid rgba(255,255,255,0.2);
-  background: transparent;
-  border-radius: 6px 6px 0 0;
-}
+    h3 {
+      @apply m-0 text-base text-text-main;
+    }
 
-.header h3 {
-  margin: 0;
-  font-size: 16px;
-  color: #2c3e50;
-}
+    .compact-title {
+      @apply m-0 text-sm text-white opacity-90 font-medium;
+    }
 
-.compact-title {
-  margin: 0;
-  font-size: 14px;
-  color: white;
-  opacity: 0.9;
-  font-weight: 500;
-}
+    .controls {
+      @apply flex gap-2;
 
-.controls {
-  display: flex;
-  gap: 8px;
-}
+      .btn {
+        @apply px-3 py-1.5 border border-gray-300 rounded bg-white text-text-muted text-[12px] cursor-pointer transition-all duration-200 hover:bg-gray-50 hover:border-gray-400;
 
-.btn {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  color: #555;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
+        &.btn-primary {
+          @apply bg-brand-primary text-white border-brand-primary hover:bg-brand-primary-hover;
+        }
 
-.compact .btn {
-  padding: 5px 10px;
-  border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.2);
-  color: white;
-  font-size: 11px;
-  border-radius: 4px;
-}
+        &.btn-sm {
+          @apply px-2 py-1 text-[11px];
+        }
+      }
+    }
+  }
 
-.btn:hover {
-  background: #f5f5f5;
-  border-color: #bbb;
-}
+  &.compact .header {
+    @apply px-4 py-2.5 border-b border-white/20 bg-transparent rounded-t-md;
 
-.compact .btn:hover {
-  background: rgba(255,255,255,0.3);
-  border-color: rgba(255,255,255,0.4);
-}
+    .btn {
+      @apply border-white/30 bg-white/20 text-white hover:bg-white/30 hover:border-white/40;
 
-.btn-primary {
-  background: #007bff;
-  color: white;
-  border-color: #007bff;
-}
+      &.btn-primary {
+        @apply bg-brand-secondary border-brand-secondary hover:bg-brand-secondary-hover;
+      }
+    }
+  }
 
-.compact .btn-primary {
-  background: #F97316;
-  border-color: #F97316;
-}
+  .repo-grid {
+    @apply max-h-[400px] overflow-y-auto;
 
-.btn-primary:hover {
-  background: #0056b3;
-  border-color: #0056b3;
-}
+    .loading {
+      @apply flex items-center justify-center p-10 text-text-muted;
 
-.compact .btn-primary:hover {
-  background: #ea580c;
-  border-color: #ea580c;
-}
+      .spinner {
+        @apply w-5 h-5 border-2 border-gray-100 border-t-brand-primary rounded-full animate-spin mr-2.5;
+      }
+    }
 
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 11px;
-}
+    .error {
+      @apply p-5 text-center text-error;
+    }
 
-.repo-grid {
-  max-height: 400px;
-  overflow-y: auto;
-}
+    .repo-list {
+      @apply grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[1px] bg-border-light;
 
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  color: #666;
-}
+      .repo-item {
+        @apply bg-white transition-all duration-200 relative hover:bg-gray-50;
 
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 10px;
-}
+        &.selected {
+          @apply bg-blue-50 border-l-[3px] border-brand-primary;
+        }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
+        &.disabled {
+          @apply bg-gray-50 opacity-70;
 
-.error {
-  padding: 20px;
-  text-align: center;
-  color: #dc3545;
-}
+          &.selected {
+            @apply bg-orange-50 border-l-[3px] border-warning;
+          }
+        }
 
-.repo-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1px;
-  background: #e1e5e9;
-}
+        &.has-toggle .repo-label {
+          @apply pr-[50px];
+        }
 
-.repo-item {
-  background: white;
-  transition: all 0.2s;
-  position: relative;
-}
+        .repo-label {
+          @apply flex items-start p-3 px-4 cursor-pointer w-full relative;
 
-.repo-item:hover {
-  background: #f8f9fa;
-}
+          input[type="checkbox"] {
+            @apply mr-3 mt-0.5 scale-110 shrink-0 disabled:opacity-50;
+          }
 
-.repo-item.selected {
-  background: #e7f3ff;
-  border-left: 3px solid #007bff;
-}
+          .repo-info {
+            @apply flex-1 min-w-0;
 
-.repo-item.disabled {
-  background: #f8f9fa;
-  opacity: 0.7;
-}
+            .repo-header {
+              @apply flex items-center justify-between mb-1 gap-2;
 
-.repo-item.disabled.selected {
-  background: #fff3cd;
-  border-left: 3px solid #ffc107;
-}
+              .repo-name {
+                @apply font-medium text-text-main flex-1 min-w-0 break-words;
+              }
 
-.repo-item.has-toggle .repo-label {
-  padding-right: 50px;
-}
+              .repo-badges {
+                @apply flex gap-1 shrink-0;
 
-.repo-label {
-  display: flex;
-  align-items: flex-start;
-  padding: 12px 16px;
-  cursor: pointer;
-  width: 100%;
-  position: relative;
-}
+                .badge {
+                  @apply text-[10px] px-1.5 py-0.5 rounded-full font-medium uppercase tracking-wider;
 
-.repo-label input[type="checkbox"] {
-  margin-right: 12px;
-  margin-top: 2px;
-  transform: scale(1.1);
-  flex-shrink: 0;
-}
+                  &.primary { @apply bg-brand-primary text-white; }
+                  &.enabled { @apply bg-success text-white; }
+                  &.disabled { @apply bg-text-muted text-white; }
+                }
+              }
+            }
 
-.repo-label input[type="checkbox"]:disabled {
-  opacity: 0.5;
-}
+            .repo-meta {
+              @apply flex gap-3 text-[12px] text-text-muted items-center;
 
-.repo-info {
-  flex: 1;
-  min-width: 0;
-}
+              .language {
+                @apply bg-gray-100 px-1.5 py-0.5 rounded font-medium;
+              }
 
-.repo-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-  gap: 8px;
-}
+              .updated {
+                @apply text-success;
+              }
+            }
+          }
+        }
 
-.repo-name {
-  font-weight: 500;
-  color: #2c3e50;
-  flex: 1;
-  min-width: 0;
-  word-break: break-word;
-}
+        .repo-actions {
+          @apply absolute right-3 top-1/2 -translate-y-1/2 flex items-center;
 
-.repo-badges {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
+          .toggle-btn {
+            @apply w-8 h-8 border-2 border-gray-200 bg-gray-50 rounded-full cursor-pointer flex items-center justify-center text-sm transition-all duration-200 hover:border-gray-400;
 
-.badge {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+            &.enabled {
+              @apply bg-success border-success text-white hover:bg-green-700 hover:border-green-700;
+            }
 
-.badge.primary {
-  background: #007bff;
-  color: white;
-}
+            &.disabled {
+              @apply bg-text-muted border-text-muted text-white hover:bg-gray-700 hover:border-gray-700;
+            }
 
-.badge.enabled {
-  background: #28a745;
-  color: white;
-}
+            &:disabled {
+              @apply opacity-60 cursor-not-allowed;
+            }
 
-.badge.disabled {
-  background: #6c757d;
-  color: white;
-}
+            .toggle-spinner {
+              @apply w-3.5 h-3.5 border-2 border-transparent border-t-white rounded-full animate-spin;
+            }
 
-.repo-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #6c757d;
-  align-items: center;
-}
-
-.language {
-  background: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 500;
-}
-
-.updated {
-  color: #28a745;
-}
-
-.repo-actions {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-}
-
-.toggle-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
-  background: #f8f9fa;
-  border: 2px solid #dee2e6;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.toggle-btn:hover {
-  border-color: #adb5bd;
-}
-
-.toggle-btn.enabled {
-  background: #28a745;
-  border-color: #28a745;
-  color: white;
-}
-
-.toggle-btn.enabled:hover {
-  background: #218838;
-  border-color: #218838;
-}
-
-.toggle-btn.disabled {
-  background: #6c757d;
-  border-color: #6c757d;
-  color: white;
-}
-
-.toggle-btn.disabled:hover {
-  background: #5a6268;
-  border-color: #5a6268;
-}
-
-.toggle-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.toggle-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.toggle-icon {
-  line-height: 1;
+            .toggle-icon {
+              @apply leading-none;
+            }
+          }
+        }
+      }
+    }
+  }
 }
 </style>
