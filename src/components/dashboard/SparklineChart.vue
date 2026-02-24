@@ -1,5 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Line } from 'vue-chartjs'
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Filler, Title, Tooltip, Legend, ChartOptions } from 'chart.js'
+
+// Register Chart.js components needed for a Line Chart
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler // Needed for area fill
+)
 
 interface Props {
   data: number[]
@@ -10,52 +24,55 @@ const props = withDefaults(defineProps<Props>(), {
   color: '#F97316'
 })
 
-const pathData = computed(() => {
-  if (!props.data || props.data.length < 2) return ''
-  
-  const width = 100
-  const height = 40
-  const max = Math.max(...props.data, 1)
-  const min = 0 // Always baseline at 0 for clear trends
-  
-  const step = width / (props.data.length - 1)
-  const range = max - min
-  
-  return props.data.map((val, i) => {
-    const x = i * step
-    const y = height - ((val - min) / range) * height
-    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`
-  }).join(' ')
-})
+// Helper to convert hex color to rgba for chart fill
+const hexToRgba = (hex: string, alpha: number): string => {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
-const areaData = computed(() => {
-  if (!pathData.value) return ''
-  return `${pathData.value} L 100 40 L 0 40 Z`
-})
+const chartData = computed(() => ({
+  // Dummy labels are fine for sparklines without axes
+  labels: props.data.map((_, i) => i.toString()), 
+  datasets: [
+    {
+      data: props.data,
+      borderColor: props.color,
+      tension: 0.4, // Smooth line
+      fill: true, // Enable area fill
+      backgroundColor: hexToRgba(props.color, 0.15), // Fill color with opacity
+      pointRadius: 0, // Hide points on the line
+      borderWidth: 2,
+    }
+  ]
+}))
+
+const chartOptions: ChartOptions<'line'> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false }, // Hide legend
+    tooltip: { enabled: false } // Hide tooltips
+  },
+  scales: {
+    x: { display: false }, // Hide x-axis
+    y: { display: false } // Hide y-axis
+  },
+  // animation: { 
+  //   duration: 2000, // Make animation longer for visibility
+  //   easing: 'easeInOutQuad', // Clearer easing function
+  //   delay: 5000, // Start animation after a short delay
+  //   loop: true
+  //   // Chart.js default line animation should provide a "draw itself" effect
+  //   // Removed explicit x and y animation objects here to avoid the TypeError
+  // }
+}
 </script>
 
 <template>
   <div class="sparkline">
-    <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="sparkline-svg">
-      <defs>
-        <linearGradient :id="`grad-${color.replace('#', '')}`" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" :style="{ stopColor: color, stopOpacity: 0.2 }" />
-          <stop offset="100%" :style="{ stopColor: color, stopOpacity: 0 }" />
-        </linearGradient>
-      </defs>
-      <path 
-        :d="areaData" 
-        :fill="`url(#grad-${color.replace('#', '')})`" 
-      />
-      <path 
-        :d="pathData" 
-        fill="none" 
-        :stroke="color" 
-        stroke-width="2" 
-        stroke-linecap="round" 
-        stroke-linejoin="round"
-      />
-    </svg>
+    <Line :data="chartData" :options="chartOptions" />
   </div>
 </template>
 
@@ -63,8 +80,10 @@ const areaData = computed(() => {
 .sparkline {
   @apply absolute inset-0 overflow-hidden pointer-events-none;
   
-  &-svg {
-    @apply w-full h-full;
+  // Ensure the canvas takes up the full space
+  canvas {
+    width: 100% !important;
+    height: 100% !important;
   }
 }
 </style>

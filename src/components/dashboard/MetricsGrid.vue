@@ -14,7 +14,7 @@ defineProps<Props>()
   <div class="metrics-grid">
     <!-- Commits Card -->
     <div class="metric-card">
-      <SparklineChart :data="metrics.commitsHistory" color="#F97316" />
+      <SparklineChart class="opacity-30 blur-xs" :data="metrics.commitsHistory" color="#F97316" />
       <div class="metric-icon">
         <TrendingUp :size="24" />
       </div>
@@ -32,7 +32,7 @@ defineProps<Props>()
 
     <!-- PRs Card -->
     <div class="metric-card">
-      <SparklineChart :data="metrics.prsHistory" color="#8b5cf6" />
+      <SparklineChart class="opacity-30 blur-xs" :data="metrics.prsHistory" color="#8b5cf6" />
       <div class="metric-icon pr-icon">
         <GitMerge :size="24" />
       </div>
@@ -50,7 +50,7 @@ defineProps<Props>()
 
     <!-- Tickets Card -->
     <div class="metric-card">
-      <SparklineChart :data="metrics.ticketsHistory" color="#10b981" />
+      <SparklineChart class="opacity-30 blur-xs" :data="metrics.ticketsHistory" color="#10b981" />
       <div class="metric-icon ticket-icon">
         <Ticket :size="24" />
       </div>
@@ -68,7 +68,7 @@ defineProps<Props>()
 
     <!-- Repos Card -->
     <div class="metric-card">
-      <SparklineChart :data="metrics.reposHistory" color="#3b82f6" />
+      <SparklineChart class="opacity-30 blur-xs" :data="metrics.reposHistory" color="#3b82f6" />
       <div class="metric-icon repo-icon">
         <Folder :size="24" />
       </div>
@@ -98,7 +98,7 @@ defineProps<Props>()
       
       &.pr-icon { @apply bg-purple-50 text-brand-purple; }
       &.ticket-icon { @apply bg-green-50 text-success; }
-      &.repo-icon { @apply bg-blue-50 text-brand-blue; }
+      &.repo-icon { @apply bg-blue-50 text-brand-primary; }
     }
 
     .metric-content {
