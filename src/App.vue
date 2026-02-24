@@ -382,89 +382,18 @@ function handleExport(): void {
 </template>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #fafbfc;
-  color: #333;
-}
-
-.app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+@reference "./style.css";
 
 .main-content {
-  flex: 1;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-  padding: 0;
+  @apply flex-1 w-full mx-auto px-0;
+  max-width: var(--max-content-width);
 }
 
-.error-message {
-  background-color: #fee;
-  border: 1px solid #fcc;
-  color: #c66;
-  padding: 12px;
-  border-radius: 4px;
-  margin: 20px;
-}
-
-.empty-state {
-  background: #fafbfc;
-  padding: 80px 40px;
-  text-align: center;
-  margin: 40px 20px;
-}
-
-.empty-content h3 {
-  color: #2c3e50;
-  margin-bottom: 12px;
-  font-size: 20px;
-}
-
-.empty-content p {
-  color: #6c757d;
-  font-size: 14px;
-  max-width: 500px;
-  margin: 0 auto;
-  line-height: 1.5;
-}
-
-/* Global utility classes */
+/* Global utility classes that aren't pure Tailwind */
 .btn {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  color: #555;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
+  @apply px-4 py-2 bg-white border border-gray-300 rounded-app-btn text-gray-700 text-sm 
+         cursor-pointer transition-all hover:bg-gray-100 hover:border-gray-400;
   font-family: inherit;
-}
-
-.btn:hover {
-  background: #f5f5f5;
-  border-color: #bbb;
-}
-
-.btn-primary {
-  background: #F97316;
-  color: white;
-  border-color: #F97316;
-}
-
-.btn-primary:hover {
-  background: #ea580c;
-  border-color: #ea580c;
 }
 
 /* Scrollbar styling */
@@ -474,16 +403,10 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  @apply bg-gray-100 rounded;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  @apply bg-gray-300 rounded hover:bg-gray-400;
 }
 </style>
