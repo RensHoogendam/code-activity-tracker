@@ -10,6 +10,7 @@ interface Props {
   autoHide?: boolean
   autoHideDelay?: number
   allowCancel?: boolean
+  variant?: 'card' | 'inline'
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -17,7 +18,8 @@ const props = withDefaults(defineProps<Props>(), {
   isVisible: true,
   autoHide: true,
   autoHideDelay: 5000, // 5 seconds
-  allowCancel: true
+  allowCancel: true,
+  variant: 'card'
 })
 
 // Emits
@@ -179,7 +181,7 @@ function getProgressFromMessage(message: string): { current: number; total: numb
 
 <template>
   <Transition name="refresh-status" mode="out-in">
-    <div v-if="shouldShow" :class="['refresh-status', statusClass]">
+    <div v-if="shouldShow" :class="['refresh-status', statusClass, `variant-${variant}`]">
       <!-- Main Status Display -->
       <div class="status-content">
         <!-- Status Icon with Animation -->
@@ -187,7 +189,7 @@ function getProgressFromMessage(message: string): { current: number; total: numb
           <component 
             :is="statusIcon" 
             :class="{ 'animate-spin': isActive }"
-            :size="20"
+            :size="variant === 'inline' ? 16 : 20"
           />
         </div>
         
@@ -195,8 +197,8 @@ function getProgressFromMessage(message: string): { current: number; total: numb
         <div class="status-text">
           <div class="status-message">{{ refreshJob?.message || 'Processing...' }}</div>
           
-          <!-- Job Details -->
-          <div class="status-details">
+          <!-- Job Details (Card only) -->
+          <div v-if="variant === 'card'" class="status-details">
             <span v-if="refreshJob?.job_id" class="job-id">
               Job: {{ formatJobId(refreshJob.job_id) }}
             </span>
@@ -210,8 +212,8 @@ function getProgressFromMessage(message: string): { current: number; total: numb
             </span>
           </div>
           
-          <!-- Job Parameters -->
-          <div v-if="jobParameters" class="job-parameters">
+          <!-- Job Parameters (Card only) -->
+          <div v-if="variant === 'card' && jobParameters" class="job-parameters">
             <div class="param-item">
               <span class="param-label">Timeframe:</span>
               <span class="param-value">{{ jobParameters.days }} days</span>
@@ -226,8 +228,8 @@ function getProgressFromMessage(message: string): { current: number; total: numb
             </div>
           </div>
           
-          <!-- Repository Progress (if available in message) -->
-          <div v-if="repositoryProgress" class="repo-progress">
+          <!-- Repository Progress (Card only) -->
+          <div v-if="variant === 'card' && repositoryProgress" class="repo-progress">
             <div class="progress-info">
               <span class="current-repo">{{ currentRepository }}</span>
               <span class="progress-fraction">
@@ -241,10 +243,20 @@ function getProgressFromMessage(message: string): { current: number; total: numb
               ></div>
             </div>
           </div>
+
+          <!-- Progress Bar (Inline only - embedded in text area) -->
+          <div v-if="variant === 'inline' && refreshJob?.progress" class="inline-progress">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill"
+                :style="{ width: `${progressBarWidth}%` }"
+              ></div>
+            </div>
+          </div>
         </div>
         
-        <!-- Progress Bar -->
-        <div v-if="refreshJob?.progress" class="progress-container">
+        <!-- Progress Bar (Card only - full width bottom) -->
+        <div v-if="variant === 'card' && refreshJob?.progress" class="progress-container">
           <div class="progress-bar">
             <div 
               class="progress-fill"
@@ -271,11 +283,11 @@ function getProgressFromMessage(message: string): { current: number; total: numb
             title="Stop refresh job"
           >
             <StopCircle :size="14" />
-            Stop
+            <span v-if="variant === 'card'">Stop</span>
           </button>
           
           <button 
-            v-if="isActive"
+            v-if="isActive && variant === 'card'"
             @click="handleCheckStatus"
             class="action-btn check-btn"
             title="Check status"
@@ -293,36 +305,97 @@ function getProgressFromMessage(message: string): { current: number; total: numb
         </div>
       </div>
       
-      <!-- Pulse Animation for Active Status -->
-      <div v-if="isActive" class="pulse-ring"></div>
+      <!-- Pulse Animation for Active Status (Card only) -->
+      <div v-if="isActive && variant === 'card'" class="pulse-ring"></div>
     </div>
   </Transition>
 </template>
 
 <style scoped lang="scss">
 .refresh-status {
-  @apply relative bg-surface rounded-app-card shadow-xl p-4 my-2 border-l-4 border-text-muted overflow-hidden transition-all duration-300;
+  @apply relative overflow-hidden transition-all duration-300;
+
+  &.variant-card {
+    @apply bg-surface rounded-app-card shadow-xl p-4 my-2 border-l-4 border-text-muted;
+  }
+
+  &.variant-inline {
+    @apply bg-white rounded-lg p-1.5 border border-gray-200 shadow-sm;
+    
+    .status-content {
+      @apply gap-2.5;
+    }
+
+    .status-icon {
+      @apply w-8 h-8 rounded-md bg-gray-50 flex items-center justify-center;
+    }
+
+    .status-message {
+      @apply text-[0.85rem] font-semibold text-text-main mb-0 truncate max-w-[200px];
+    }
+
+    .inline-progress {
+      @apply mt-1 w-full;
+
+      .progress-bar {
+        @apply w-full h-1 bg-gray-100 rounded-full overflow-hidden;
+
+        .progress-fill {
+          @apply h-full bg-brand-primary rounded-full transition-[width] duration-300;
+        }
+      }
+    }
+    
+    .status-actions {
+      @apply gap-1;
+      
+      .action-btn {
+        @apply h-7 px-2 py-0.5 text-[0.75rem] min-w-[24px];
+      }
+    }
+  }
 
   /* Status Color Variants */
   &.status-started,
   &.status-processing {
-    @apply border-l-brand-primary bg-gradient-to-r from-blue-50/50 to-transparent;
+    &.variant-card { @apply border-l-brand-primary bg-gradient-to-r from-blue-50/50 to-transparent; }
+    &.variant-inline { @apply border-brand-primary/20 bg-blue-50/30; }
+    
+    .status-icon {
+      @apply bg-gradient-to-br from-blue-50 to-blue-200 text-brand-primary;
+    }
   }
 
   &.status-completed {
-    @apply border-l-success bg-gradient-to-r from-green-50/50 to-transparent;
+    &.variant-card { @apply border-l-success bg-gradient-to-r from-green-50/50 to-transparent; }
+    &.variant-inline { @apply border-success/20 bg-green-50/30; }
+
+    .status-icon {
+      @apply bg-gradient-to-br from-green-50 to-green-200 text-success;
+    }
   }
 
   &.status-failed {
-    @apply border-l-error bg-gradient-to-r from-red-50/50 to-transparent;
+    &.variant-card { @apply border-l-error bg-gradient-to-r from-red-50/50 to-transparent; }
+    &.variant-inline { @apply border-error/20 bg-red-50/30; }
+
+    .status-icon {
+      @apply bg-gradient-to-br from-red-50 to-red-200 text-error;
+    }
   }
 
   &.status-cancelled {
-    @apply border-l-warning bg-gradient-to-r from-orange-50/50 to-transparent;
+    &.variant-card { @apply border-l-warning bg-gradient-to-r from-orange-50/50 to-transparent; }
+    &.variant-inline { @apply border-warning/20 bg-orange-50/30; }
+
+    .status-icon {
+      @apply bg-gradient-to-br from-orange-50 to-orange-200 text-warning;
+    }
   }
 
   &.status-idle {
-    @apply border-l-text-muted bg-gradient-to-r from-gray-50/50 to-transparent;
+    &.variant-card { @apply border-l-text-muted bg-gradient-to-r from-gray-50/50 to-transparent; }
+    &.variant-inline { @apply border-gray-200 bg-gray-50; }
   }
 
   /* Content Layout */
@@ -330,7 +403,7 @@ function getProgressFromMessage(message: string): { current: number; total: numb
     @apply flex items-center gap-3.5 relative z-[2];
 
     .status-icon {
-      @apply shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-white/80 shadow-sm;
+      @apply shrink-0 flex items-center justify-center;
 
       .animate-spin {
         @apply animate-[spin_1.5s_linear_infinite];
@@ -338,31 +411,12 @@ function getProgressFromMessage(message: string): { current: number; total: numb
     }
   }
 
-  &.status-started,
-  &.status-processing {
-    .status-icon {
-      @apply bg-gradient-to-br from-blue-50 to-blue-200 text-brand-primary;
-    }
-  }
-
-  &.status-completed .status-icon {
-    @apply bg-gradient-to-br from-green-50 to-green-200 text-success;
-  }
-
-  &.status-failed .status-icon {
-    @apply bg-gradient-to-br from-red-50 to-red-200 text-error;
-  }
-
-  &.status-cancelled .status-icon {
-    @apply bg-gradient-to-br from-orange-50 to-orange-200 text-warning;
-  }
-
   /* Text Content */
   .status-text {
     @apply flex-1 min-w-0;
 
     .status-message {
-      @apply text-[0.95rem] font-semibold text-text-main mb-1 leading-[1.3];
+      @apply leading-[1.3];
     }
 
     .status-details {

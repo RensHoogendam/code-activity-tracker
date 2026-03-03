@@ -292,7 +292,7 @@ function formatDate(dateString: string | null): string {
   }
 
   .repo-grid {
-    @apply max-h-[400px] overflow-y-auto;
+    @apply max-h-100 overflow-y-auto;
 
     .loading {
       @apply flex items-center justify-center p-10 text-text-muted;
@@ -307,7 +307,7 @@ function formatDate(dateString: string | null): string {
     }
 
     .repo-list {
-      @apply grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[1px] bg-border-light;
+      @apply grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-px bg-border-light;
 
       .repo-item {
         @apply bg-white transition-all duration-200 relative hover:bg-gray-50;
@@ -325,7 +325,7 @@ function formatDate(dateString: string | null): string {
         }
 
         &.has-toggle .repo-label {
-          @apply pr-[50px];
+          @apply pr-12.5;
         }
 
         .repo-label {
@@ -342,7 +342,7 @@ function formatDate(dateString: string | null): string {
               @apply flex items-center justify-between mb-1 gap-2;
 
               .repo-name {
-                @apply font-medium text-text-main flex-1 min-w-0 break-words;
+                @apply font-medium text-text-main flex-1 min-w-0 wrap-break-word;
               }
 
               .repo-badges {

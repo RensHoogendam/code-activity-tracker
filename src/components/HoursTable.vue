@@ -1,5 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, type Ref } from 'vue'
+import { Copy, ExternalLink } from 'lucide-vue-next'
+import { useToast } from '../stores/toastStore'
+import { 
+  extractIssueId, 
+  getDisplayTitle, 
+  getCopyableText, 
+  copyToClipboard 
+} from '../services/activityUtils'
 
 import type { ProcessedCommit } from '../types/bitbucket'
 
@@ -13,6 +21,8 @@ const props = withDefaults(defineProps<Props>(), {
   data: () => [],
   isLoading: false
 })
+
+const toast = useToast()
 
 // Reactive state with proper typing
 const sortField: Ref<string> = ref('date')
@@ -89,39 +99,23 @@ function getItemType(item: ProcessedCommit): 'commit' | 'pr' {
   return item.commit_hash ? 'commit' : 'pr'
 }
 
-function getDisplayTitle(item: ProcessedCommit): string {
-  console.log('Getting display title for item:', item)
-  
-  if (item.commit_hash) {
-    return item.commit_message?.split('\n')[0] || 'Commit'
-  } else {
-    return item.pr || 'Pull Request'
-  }
+function handleCopyToClipboard(text: string, label: string): void {
+  copyToClipboard(text).then(success => {
+    if (success) {
+      toast.success(`Copied ${label} to clipboard`)
+    } else {
+      toast.error('Failed to copy to clipboard')
+    }
+  })
 }
 
-function extractIssueId(item: ProcessedCommit): string | null {
-  // Use the ticket field from backend if available
-  if (item.ticket) {
-    return item.ticket
-  }
-  
-  // Extract from message or title
-  const text = getDisplayTitle(item)
-  const match = text?.match(/(ASUITE-\d+|ASM-\d+)/)
-  return match ? match[1] : null
+function copyForTimeWriting(item: ProcessedCommit): void {
+  const text = getCopyableText(item)
+  handleCopyToClipboard(text, 'time writing text')
 }
 
 function getIssueUrl(issueId: string): string {
   return `https://atabix.atlassian.net/browse/${issueId}`
-}
-
-async function copyToClipboard(text: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text)
-    // Could add a toast notification here
-  } catch (err) {
-    console.error('Failed to copy to clipboard:', err)
-  }
 }
 
 function getRepoDisplayName(repo: string | undefined): string {
@@ -214,25 +208,32 @@ function getRepoDisplayName(repo: string | undefined): string {
             <td class="issue-cell">
               <div v-if="extractIssueId(item)" class="issue-actions">
                 <button 
-                  v-if="extractIssueId(item)"
-                  class="copy-btn"
-                  @click="copyToClipboard(extractIssueId(item)!)"
-                  :title="`Copy ${extractIssueId(item)} to clipboard`"
+                  class="copy-btn ticket-id"
+                  @click="handleCopyToClipboard(extractIssueId(item)!, extractIssueId(item)!)"
+                  :title="`Copy ${extractIssueId(item)}`"
                 >
                   {{ extractIssueId(item) }}
                 </button>
+                
+                <button 
+                  class="copy-full-btn"
+                  @click="copyForTimeWriting(item)"
+                  title="Copy for time writing (ID + Description)"
+                >
+                  <Copy :size="14" />
+                </button>
+
                 <a 
-                  v-if="extractIssueId(item)"
                   :href="getIssueUrl(extractIssueId(item)!)"
                   target="_blank"
                   class="issue-link"
                   :title="`Open ${extractIssueId(item)} in Jira`"
                 >
-                  ↗
+                  <ExternalLink :size="14" />
                 </a>
-                <span v-if="item.ticket_source" class="ticket-source" :title="`Ticket found in ${item.ticket_source}`">
-                  ({{ item.ticket_source }})
-                </span>
+              </div>
+              <div v-if="item.ticket_source" class="ticket-source" :title="`Ticket found in ${item.ticket_source}`">
+                via {{ item.ticket_source }}
               </div>
             </td>
           </tr>
@@ -333,35 +334,43 @@ function getRepoDisplayName(repo: string | undefined): string {
       }
 
       .title-cell {
-        @apply max-w-[400px];
+        @apply max-w-100;
 
         .title-content {
-          @apply leading-relaxed break-words;
+          @apply leading-relaxed wrap-break-word text-sm;
         }
       }
 
       .branch-badge {
-        @apply bg-orange-50 text-brand-secondary px-2 py-1 rounded text-[0.75rem] font-medium border border-orange-100;
+        @apply bg-orange-50 text-brand-secondary px-2 py-1 rounded text-[0.7rem] font-medium border border-orange-100;
       }
 
       .no-branch {
-        @apply text-gray-400 italic;
+        @apply text-gray-400 italic text-xs;
       }
 
       .issue-actions {
-        @apply flex gap-2 items-center;
+        @apply flex gap-1.5 items-center;
 
         .copy-btn {
-          @apply bg-brand-primary text-white border-none px-3 py-1.5 rounded-md text-[0.8rem] font-medium cursor-pointer transition-all duration-300 hover:bg-brand-primary-hover active:translate-y-0 -translate-y-[1px];
+          @apply bg-brand-primary text-white border-none px-2 py-1 rounded text-[0.75rem] font-semibold cursor-pointer transition-all duration-200 active:scale-95;
+          
+          &.ticket-id {
+            @apply min-w-[85px];
+          }
+        }
+
+        .copy-full-btn {
+          @apply flex items-center justify-center w-7 h-7 bg-brand-secondary text-white border-none rounded cursor-pointer transition-all duration-200 active:scale-95;
         }
 
         .issue-link {
-          @apply inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-text-muted no-underline rounded text-[0.8rem] transition-colors duration-300 hover:bg-gray-200 hover:text-text-main;
+          @apply inline-flex items-center justify-center w-7 h-7 bg-gray-100 text-text-muted no-underline rounded transition-colors duration-200 hover:bg-gray-200 hover:text-text-main;
         }
-
-        .ticket-source {
-          @apply text-[0.7rem] text-text-muted italic ml-1;
-        }
+      }
+      
+      .ticket-source {
+        @apply text-[0.65rem] text-text-muted italic mt-1 ml-0.5;
       }
 
       .no-data {
@@ -383,7 +392,7 @@ function getRepoDisplayName(repo: string | undefined): string {
       }
       
       .title-cell {
-        @apply max-w-[250px];
+        @apply max-w-62.5;
       }
     }
   }

@@ -43,7 +43,7 @@ const lastUpdated: Ref<Date | null> = ref(null)
 const selectedRepos: Ref<string[]> = ref([])
 
 // Global error handling
-onErrorCaptured((err, instance, info) => {
+onErrorCaptured((err, _instance, info) => {
   if (err instanceof AuthError) {
     isAuthenticated.value = false
   }
@@ -361,7 +361,7 @@ function handleExport(): void {
     <AppNavigation 
       :last-updated="lastUpdated"
       :filters="filters"
-      @refresh="fetchHoursData"
+      @refresh="handleForceRefresh"
       @force-refresh="handleForceRefresh"
       @clear-cache="handleClearCache"
       @filter-change="applyFilters"
@@ -385,7 +385,7 @@ function handleExport(): void {
         @filter-change="applyFilters"
         @export="handleExport"
         @repos-changed="handleReposChanged"
-        @refresh="fetchHoursData"
+        @refresh="handleForceRefresh"
         @force-refresh="handleForceRefresh"
         @clear-cache="handleClearCache"
         :refresh-job="refreshJob"

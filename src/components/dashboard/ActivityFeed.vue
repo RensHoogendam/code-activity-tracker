@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { Save, GitPullRequest } from 'lucide-vue-next'
+import { Save, GitPullRequest, Copy } from 'lucide-vue-next'
+import { useToast } from '../../stores/toastStore'
+import { 
+  getDisplayTitle, 
+  getCopyableText, 
+  copyToClipboard,
+  formatRelativeTime,
+  extractIssueId
+} from '../../services/activityUtils'
 import type { ProcessedCommit } from '../../types/bitbucket'
 
 interface Props {
@@ -8,26 +16,17 @@ interface Props {
 
 defineProps<Props>()
 
-function getDisplayTitle(item: ProcessedCommit): string {
-  if (item.commit_hash) {
-    return item.commit_message?.split('')[0]?.slice(0, 60) + '...' || 'Commit'
-  }
-  return item.pr?.slice(0, 60) + '...' || 'Pull Request'
-}
+const toast = useToast()
 
-function formatRelativeTime(dateString: string | undefined): string {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / (1000 * 60))
-  const hours = Math.floor(diff / (1000 * 60 * 60))
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  
-  if (days > 0) return `${days}d ago`
-  if (hours > 0) return `${hours}h ago`
-  if (minutes > 0) return `${minutes}m ago`
-  return 'Just now'
+function copyForTimeWriting(item: ProcessedCommit): void {
+  const text = getCopyableText(item)
+  copyToClipboard(text).then(success => {
+    if (success) {
+      toast.success('Copied for time writing')
+    } else {
+      toast.error('Failed to copy')
+    }
+  })
 }
 </script>
 
@@ -41,20 +40,29 @@ function formatRelativeTime(dateString: string | undefined): string {
       <div 
         v-for="item in recentActivity.slice(0, 6)" 
         :key="String(item.commit_hash || item.pr_id || Math.random())" 
-        class="activity-item"
+        class="activity-item group"
       >
         <div class="activity-icon">
           <Save v-if="item.commit_hash" :size="16" />
           <GitPullRequest v-else :size="16" />
         </div>
         <div class="activity-content">
-          <div class="activity-title">
-            {{ getDisplayTitle(item) }}
+          <div class="activity-header">
+            <div class="activity-title" :title="getDisplayTitle(item)">
+              {{ getDisplayTitle(item) }}
+            </div>
+            <button 
+              class="copy-action opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              @click="copyForTimeWriting(item)"
+              title="Copy for time writing"
+            >
+              <Copy :size="14" />
+            </button>
           </div>
           <div class="activity-meta">
-            <span class="repo">{{ item.repo }}</span>
+            <span class="repo">{{ item.repo.split('/').pop() }}</span>
             <span class="date">{{ formatRelativeTime(item.commit_date || item.pr_updated_on || '') }}</span>
-            <span v-if="item.ticket" class="ticket">{{ item.ticket }}</span>
+            <span v-if="extractIssueId(item)" class="ticket">{{ extractIssueId(item) }}</span>
           </div>
         </div>
       </div>
@@ -82,7 +90,11 @@ function formatRelativeTime(dateString: string | undefined): string {
     @apply flex flex-col gap-4;
 
     .activity-item {
-      @apply flex items-start gap-3 p-3 rounded-lg bg-gray-50;
+      @apply flex items-start gap-3 p-3 rounded-lg bg-gray-50 transition-colors duration-200;
+
+      &:hover {
+        @apply bg-gray-100;
+      }
 
       .activity-icon {
         @apply w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 text-text-muted;
@@ -91,19 +103,27 @@ function formatRelativeTime(dateString: string | undefined): string {
       .activity-content {
         @apply flex-1 min-w-0;
 
-        .activity-title {
-          @apply text-sm font-medium text-text-main mb-1 truncate;
+        .activity-header {
+          @apply flex justify-between items-center mb-1;
+
+          .activity-title {
+            @apply text-sm font-medium text-text-main truncate pr-2;
+          }
+
+          .copy-action {
+            @apply p-1 text-text-muted hover:text-brand-secondary bg-transparent border-none cursor-pointer rounded flex items-center justify-center;
+          }
         }
 
         .activity-meta {
-          @apply flex gap-3 text-xs text-text-muted;
+          @apply flex gap-3 text-xs text-text-muted items-center;
 
           .repo {
-            @apply bg-gray-200 px-1.5 py-0.5 rounded;
+            @apply bg-gray-200 px-1.5 py-0.5 rounded text-[10px] font-medium;
           }
 
           .ticket {
-            @apply bg-orange-50 text-brand-secondary px-1.5 py-0.5 rounded font-medium;
+            @apply bg-orange-50 text-brand-secondary px-1.5 py-0.5 rounded font-bold;
           }
         }
       }

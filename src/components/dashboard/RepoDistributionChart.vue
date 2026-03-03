@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
   }
 
   .chart-content {
-    @apply h-[200px] relative;
+    @apply h-50 relative;
   }
 }
 </style>

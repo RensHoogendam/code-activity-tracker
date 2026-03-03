@@ -11,7 +11,8 @@ import type {
   ProcessedCommit,
   AppFilters,
   RepoActivity,
-  DashboardMetrics
+  DashboardMetrics,
+  RefreshJobStatus
 } from '../types/bitbucket'
 
 // Props with proper typing
@@ -21,6 +22,8 @@ interface Props {
   isLoading: boolean
   lastUpdated: Date | null
   error: string | null
+  refreshJob: RefreshJobStatus | null
+  showRefreshStatus: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -32,6 +35,7 @@ const props = withDefaults(defineProps<Props>(), {
     type: 'all'
   }),
   isLoading: false,
+  refreshJob: null,
   lastUpdated: null,
   error: null
 })
@@ -42,6 +46,10 @@ const emit = defineEmits<{
   'refresh': []
   'force-refresh': []
   'clear-cache': []
+  'hide-refresh-status': []
+  'retry-refresh': []
+  'cancel-refresh': [jobId: string]
+  'check-refresh-status': [jobId: string]
 }>()
 
 // Computed properties
@@ -86,8 +94,6 @@ const metrics = computed((): DashboardMetrics => {
     return Math.round(((curr - prev) / prev) * 100)
   }
 
-  // Generate history for sparklines (last X days)
-  const historyLabels: string[] = []
   const commitsHistory: number[] = []
   const prsHistory: number[] = []
   const ticketsHistory: number[] = []
@@ -174,6 +180,8 @@ function getDateRangeText(): string {
 <template>
   <div class="dashboard">
     <PageToolbar 
+      title="Dashboard"
+      subtitle="Activity overview and analytics"
       :last-updated="lastUpdated"
       :filters="filters"
       :is-loading="isLoading"
@@ -181,6 +189,12 @@ function getDateRangeText(): string {
       @force-refresh="$emit('force-refresh')"
       @clear-cache="$emit('clear-cache')"
       @filter-change="onFiltersChange"
+      :refresh-job="refreshJob"
+      :show-refresh-status="showRefreshStatus"
+      @hide-refresh-status="$emit('hide-refresh-status')"
+      @retry-refresh="$emit('retry-refresh')"
+      @cancel-refresh="$emit('cancel-refresh', $event)"
+      @check-refresh-status="$emit('check-refresh-status', $event)"
     />
     
     <!-- Error State -->
@@ -255,7 +269,7 @@ function getDateRangeText(): string {
     @apply flex items-center justify-center min-h-[60vh] p-6;
 
     .empty-content {
-      @apply text-center max-w-[400px];
+      @apply text-center max-w-100;
 
       h3 {
         @apply text-text-main mb-4 text-xl;

@@ -215,17 +215,6 @@ function formatDate(dateString: string): string {
 
 <template>
   <div class="settings-page">
-    <!-- Header -->
-    <div class="settings-header">
-      <div class="header-content">
-        <div class="breadcrumb">
-          <router-link to="/" class="breadcrumb-link">Dashboard</router-link>
-          <span class="breadcrumb-separator">→</span>
-          <span class="breadcrumb-current">Settings</span>
-        </div>
-      </div>
-    </div>
-
     <div class="settings-content">
       <div class="settings-section">
         <div class="section-header">
@@ -427,7 +416,7 @@ function formatDate(dateString: string): string {
         @apply flex gap-6 items-start mb-5;
 
         .search-control {
-          @apply flex-1 max-w-[300px];
+          @apply flex-1 max-w-75;
 
           .search-input {
             @apply w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm transition-colors duration-200 focus:outline-none focus:border-brand-secondary;
@@ -463,7 +452,7 @@ function formatDate(dateString: string): string {
         }
 
         .save-btn {
-          @apply bg-brand-secondary border-none text-white px-5 py-2.5 rounded font-semibold text-sm cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-brand-secondary-hover hover:-translate-y-[1px] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none;
+          @apply bg-brand-secondary border-none text-white px-5 py-2.5 rounded font-semibold text-sm cursor-pointer transition-all duration-200 min-w-35 hover:bg-brand-secondary-hover hover:-translate-y-px disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none;
 
           &-content {
             @apply flex items-center justify-center gap-2;
@@ -480,7 +469,7 @@ function formatDate(dateString: string): string {
       @apply p-6;
 
       .loading-state, .error-state {
-        @apply flex items-center justify-center p-[60px] text-center text-text-muted;
+        @apply flex items-center justify-center p-15 text-center text-text-muted;
 
         .spinner {
           @apply w-6 h-6 border-[3px] border-gray-100 border-t-brand-secondary rounded-full animate-spin mr-3;
@@ -510,7 +499,7 @@ function formatDate(dateString: string): string {
           }
 
           .repo-label {
-            @apply flex items-start gap-3 p-4 pr-[60px] cursor-pointer w-full;
+            @apply flex items-start gap-3 p-4 pr-15 cursor-pointer w-full;
 
             .repo-checkbox {
               @apply mt-0.5 scale-110 disabled:opacity-50;

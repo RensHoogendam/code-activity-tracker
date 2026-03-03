@@ -5,8 +5,11 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import listPlugin from '@fullcalendar/list'
+import { Copy } from 'lucide-vue-next'
 import PageToolbar from './PageToolbar.vue'
 import HoursFilters from './HoursFilters.vue'
+import { useToast } from '../stores/toastStore'
+import { getCopyableText, copyToClipboard } from '../services/activityUtils'
 
 import type { CalendarOptions } from '@fullcalendar/core'
 import type { ProcessedCommit, AppFilters, RefreshJobStatus } from '../types/bitbucket'
@@ -49,6 +52,8 @@ const emit = defineEmits<{
   'check-refresh-status': [jobId: string]
 }>()
 
+const toast = useToast()
+
 const calendarOptions = computed((): CalendarOptions => ({
   plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin],
   initialView: 'dayGridMonth',
@@ -85,7 +90,8 @@ const calendarEvents = computed(() => {
         message: item.commit_message,
         author: item.commit_author_raw || item.pr_author_display_name,
         type: isPR ? 'Pull Request' : 'Commit',
-        ticket: item.ticket
+        ticket: item.ticket,
+        fullItem: item
       }
     }
   })
@@ -99,6 +105,21 @@ function handleEventClick(info: any) {
 
 function closeEventDetails() {
   selectedEvent.value = null
+}
+
+function copyForTimeWriting() {
+  if (!selectedEvent.value) return
+  
+  const item = selectedEvent.value.extendedProps.fullItem
+  const text = getCopyableText(item)
+  
+  copyToClipboard(text).then(success => {
+    if (success) {
+      toast.success('Copied for time writing')
+    } else {
+      toast.error('Failed to copy')
+    }
+  })
 }
 
 const availableRepos = computed((): string[] => {
@@ -184,6 +205,13 @@ function onFiltersChange(newFilters: Partial<AppFilters>): void {
             <span class="detail-label">Message:</span>
             <div class="detail-value message-text">{{ selectedEvent.extendedProps.message || selectedEvent.title }}</div>
           </div>
+          
+          <div class="modal-actions">
+            <button class="copy-full-btn" @click="copyForTimeWriting">
+              <Copy :size="16" class="mr-2" />
+              Copy for Time Writing
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -265,8 +293,16 @@ function onFiltersChange(newFilters: Partial<AppFilters>): void {
           }
 
           &.message-text {
-            @apply whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-border-light max-h-[200px] overflow-y-auto;
+            @apply whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-border-light max-h-50 overflow-y-auto;
           }
+        }
+      }
+
+      .modal-actions {
+        @apply mt-6 pt-4 border-t border-gray-100;
+
+        .copy-full-btn {
+          @apply w-full flex items-center justify-center bg-brand-secondary text-white border-none py-3 px-4 rounded-lg font-semibold cursor-pointer transition-all duration-200 active:scale-[0.98];
         }
       }
     }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RotateCw, Settings, Trash2 } from 'lucide-vue-next'
+import { RotateCw } from 'lucide-vue-next'
 import RefreshStatus from './RefreshStatus.vue'
 
 import type { AppFilters, RefreshJobStatus } from '../types/bitbucket'
@@ -89,14 +89,25 @@ function formatLastUpdated(date: Date | null): string {
       <!-- Right: Actions and status -->
       <div class="toolbar-right">
         <!-- Last Updated -->
-        <div class="last-updated">
+        <div class="last-updated" v-if="!refreshJob?.is_running">
           <span class="update-label">Last updated:</span>
           <span class="update-time">{{ formatLastUpdated(lastUpdated) }}</span>
         </div>
 
-        <!-- Refresh Controls -->
+        <!-- Refresh Controls / Status -->
         <div class="refresh-controls">
+          <RefreshStatus
+            v-if="refreshJob?.is_running"
+            variant="inline"
+            :refresh-job="refreshJob"
+            :is-visible="true"
+            @hide="$emit('hide-refresh-status')"
+            @retry="$emit('retry-refresh')"
+            @cancel="$emit('cancel-refresh', $event)"
+            @check-status="$emit('check-refresh-status', $event)"
+          />
           <button 
+            v-else
             @click="$emit('refresh')"
             class="refresh-btn"
             :disabled="isLoading"
@@ -104,41 +115,16 @@ function formatLastUpdated(date: Date | null): string {
             <RotateCw class="icon" :class="{ spinning: isLoading }" :size="16" />
             {{ isLoading ? 'Refreshing...' : 'Refresh' }}
           </button>
-          
-          <div class="dropdown">
-            <button class="dropdown-btn" title="More refresh options">
-              <Settings :size="16" />
-            </button>
-            <div class="dropdown-menu">
-              <button @click="$emit('force-refresh')" class="dropdown-item">
-                <RotateCw :size="14" /> Force Refresh
-              </button>
-              <button @click="$emit('clear-cache')" class="dropdown-item">
-                <Trash2 :size="14" /> Clear Cache
-              </button>
-            </div>
-          </div>
         </div>
       </div>
-    </div>
-    
-    <!-- Refresh Status Display -->
-    <div v-if="showRefreshStatus" class="refresh-status-container">
-      <RefreshStatus
-        :refresh-job="refreshJob"
-        :is-visible="showRefreshStatus"
-        @hide="$emit('hide-refresh-status')"
-        @retry="$emit('retry-refresh')"
-        @cancel="$emit('cancel-refresh', $event)"
-        @check-status="$emit('check-refresh-status', $event)"
-      />
     </div>
   </div>
 </template>
 
 <style scoped lang="scss">
 .page-toolbar {
-  @apply bg-surface border-b border-gray-200 py-4;
+  // @apply bg-surface border-b border-gray-200 py-4;
+  @apply py-4;
 
   .toolbar-container {
     @apply max-w-content-width mx-auto px-6 flex items-center justify-between gap-6;
@@ -166,7 +152,7 @@ function formatLastUpdated(date: Date | null): string {
         }
 
         .period-select {
-          @apply bg-white border-2 border-gray-200 text-text-main px-3 py-1.5 rounded text-sm min-w-[140px] transition-colors duration-200;
+          @apply bg-white border-2 border-gray-200 text-text-main px-3 py-1.5 rounded text-sm min-w-35 transition-colors duration-200;
 
           &:focus {
             @apply outline-none border-brand-primary;
@@ -197,7 +183,7 @@ function formatLastUpdated(date: Date | null): string {
           @apply bg-brand-primary border-none text-white px-4 py-2 rounded font-medium text-sm cursor-pointer transition-all duration-200 flex items-center gap-1.5;
 
           &:hover:not(:disabled) {
-            @apply bg-brand-primary-hover -translate-y-[1px];
+            @apply bg-brand-primary-hover -translate-y-px;
           }
 
           &:disabled {
@@ -221,7 +207,7 @@ function formatLastUpdated(date: Date | null): string {
           }
 
           &-menu {
-            @apply absolute top-full right-0 bg-white border border-gray-200 rounded shadow-lg mt-1 min-w-[160px] z-[1000] hidden;
+            @apply absolute top-full right-0 bg-white border border-gray-200 rounded shadow-lg mt-1 min-w-40 z-1000 hidden;
 
             .dropdown-item {
               @apply flex items-center gap-2 w-full px-3 py-2 bg-transparent border-none text-text-main text-left text-sm cursor-pointer transition-colors duration-200;
@@ -237,14 +223,6 @@ function formatLastUpdated(date: Date | null): string {
           }
         }
       }
-    }
-  }
-
-  .refresh-status-container {
-    @apply bg-gray-50 border-t border-gray-200 py-2;
-
-    :deep(.refresh-status) {
-      @apply max-w-content-width mx-auto px-6;
     }
   }
 }

@@ -54,17 +54,22 @@ function initChart() {
   if (chartInstance) {
     chartInstance.destroy()
   }
+
+  const styles = getComputedStyle(document.documentElement)
+
   
   chartInstance = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
       labels: dailyData.labels,
       datasets: [{
         label: 'Commits',
         data: dailyData.commits,
-        backgroundColor: '#F97316',
-        borderRadius: 4,
-        borderSkipped: false,
+        backgroundColor: `${styles.getPropertyValue('--color-brand-secondary').trim()}33`,
+        borderColor: `${styles.getPropertyValue('--color-brand-secondary').trim()}`,
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4
       }]
     },
     options: {
@@ -150,7 +155,7 @@ onBeforeUnmount(() => {
   }
 
   .chart-content {
-    @apply h-[200px] relative;
+    @apply h-50 relative;
   }
 }
 </style>
